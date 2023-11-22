@@ -11,7 +11,7 @@ enum logic [2:0] {IDLE, BLOCK, COMPUTE, WRITE} state,next_state;
 
 parameter integer SIZE = ??; 
 
-// TODO - This some
+
 // NOTE : Below mentioned frame work is for reference purpose.
 // Local variables might not be complete and you might have to add more variables
 // or modify these variables. Code below is more as a reference.
@@ -62,11 +62,20 @@ assign tstep = (i - 1);
 
 // Note : Function defined are for reference purpose. Feel free to add more functions or modify below.
 // Function to determine number of blocks in memory to fetch
+
+//TODO 
 function logic [15:0] determine_num_blocks(input logic [31:0] size);
 
-  // Student to add function implementation
+	//rounding
+	logic [31:0] quotient = (size >> 4); //quotient = size/16, size = 101000
+	logic [31:0] n = quotient << 4; //n = quotient * 16, = 100000 quotient=000010
 
- 
+	if(size ^ n) begin
+		determine_num_blocks = quotient + 1;
+	end
+	else begin
+		determine_num_blocks = quotient;
+	end
 endfunction
 
 
@@ -95,7 +104,7 @@ endfunction
 function logic [31:0] ror(input logic [31:0] in,
                                   input logic [7:0] s);
 begin
-   
+	ror = (in >> s) | (in << (32-s));
 end
 endfunction
 
