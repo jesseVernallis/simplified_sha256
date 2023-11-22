@@ -11,6 +11,7 @@ enum logic [2:0] {IDLE, BLOCK, COMPUTE, WRITE} state,next_state;
 
 parameter integer SIZE = ??; 
 
+// TODO - This some
 // NOTE : Below mentioned frame work is for reference purpose.
 // Local variables might not be complete and you might have to add more variables
 // or modify these variables. Code below is more as a reference.
