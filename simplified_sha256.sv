@@ -9,6 +9,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 // FSM state variables 
 enum logic [2:0] {IDLE, BLOCK, COMPUTE, WRITE} state,next_state;
 
+//TODO ??
 parameter integer SIZE = ??; 
 
 
@@ -63,7 +64,7 @@ assign tstep = (i - 1);
 // Note : Function defined are for reference purpose. Feel free to add more functions or modify below.
 // Function to determine number of blocks in memory to fetch
 
-//TODO 
+//TODO Check if the input is the raw message or message with padding
 function logic [15:0] determine_num_blocks(input logic [31:0] size);
 
 	//rounding
@@ -78,14 +79,21 @@ function logic [15:0] determine_num_blocks(input logic [31:0] size);
 	end
 endfunction
 
-
+//TODO Check if the function works - prob works
 // SHA256 hash round
 function logic [255:0] sha256_op(input logic [31:0] a, b, c, d, e, f, g, h, w,
                                  input logic [7:0] t);
     logic [31:0] S1, S0, ch, maj, t1, t2; // internal signals
 begin
     
-    sha256_op = ??;
+	S0 = rightrotate(a, 2) ^ rightrotate(a, 13) ^ rightrotate(a, 22);
+	maj = (a & b) ^ (a & c) ^ (b & c);
+	t2 = S0 + maj;
+	S1 = rightrotate(e, 6) ^ rightrotate(e, 11) ^ rightrotate(e, 25);
+    ch = (e & f) ^ ((~e) & g);
+    t1 = h + S1 + ch + k[t] + w;
+    sha256_op = {t1 + t2, a, b, c, d + t1, e, f, g};
+	 //            A       B  C  D  E       F  G  H
 end
 endfunction
 
@@ -101,6 +109,7 @@ endfunction
 // final value after right rotate = 8888 1111 ffff 2222 3333 4444 6666 7777
 // Right rotation function
 
+//TODO Check if it works
 function logic [31:0] ror(input logic [31:0] in,
                                   input logic [7:0] s);
 begin
@@ -108,7 +117,7 @@ begin
 end
 endfunction
 
-
+//TODO This could be fine
 always_ff @(posedge clk, negedge rst_n)
 begin
   if (!rst_n) begin
@@ -126,17 +135,18 @@ end
 // SHA-256 FSM 
 // Get a BLOCK from the memory, COMPUTE Hash output using SHA256 function
 // and write back hash value back to memory
+
 always_comb begin
   if (!rst_n) begin
-   
-
+	next_state = IDLE;
+	//TODO set values to be reset
   end
   else begin 
 	  case (state)
 		// Initialize hash values h0 to h7 and a to h, other variables and memory we, address offset, etc
 		IDLE: begin 
 			if(start) begin 
-
+				//TODO figure out what to put here. Reset on idle
 		   end
 		end
 
@@ -146,7 +156,7 @@ always_comb begin
 		BLOCK: begin
 		// Fetch message in 512-bit block size
 		// For each of 512-bit block initiate hash value computation
-			
+		//TODO add output and next state
 			
 
 		end
@@ -157,7 +167,7 @@ always_comb begin
 		// move to WRITE stage
 		COMPUTE: begin
 		// 64 processing rounds steps for 512-bit block 
-
+		//TODO add output and next state
 					
 		end
 
@@ -165,7 +175,8 @@ always_comb begin
 		// h0 to h7 after compute stage has final computed hash value
 		// write back these h0 to h7 to memory starting from output_addr
 		WRITE: begin
-			
+		//TODO add output and next state
+		
 		end
       endcase
 	end
