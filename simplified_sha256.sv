@@ -1,13 +1,13 @@
 module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
- input logic  clk, rst_n, start,
- input logic  [15:0] input_addr, hash_addr,
- output logic done, memory_clk, enable_write,
- output logic [15:0] memory_addr,
- output logic [31:0] memory_write_data,
- input logic [31:0] memory_read_data);
+ input logic  clk, rst_n, start, // standard inputs
+ input logic  [15:0] input_addr, hash_addr, // CONSTANTS = address values
+ input logic [31:0] memory_read_data, // data that is read from memory
+ output logic done, memory_clk, enable_write, // memory
+ output logic [15:0] memory_addr, // current memory address for READ and WRITE
+ output logic [31:0] memory_write_data); // data to write to memory
 
 // FSM state variables 
-enum logic [2:0] {IDLE, BLOCK, COMPUTE, WRITE} state,next_state;
+enum logic [2:0] {IDLE, READ, BLOCK, COMPUTE, WRITE} state,next_state;
 
 //TODO ??
 parameter integer SIZE = ??; 
@@ -18,23 +18,35 @@ parameter integer SIZE = ??;
 // or modify these variables. Code below is more as a reference.
 
 // Local variables
-logic [31:0] w[64];
-logic [31:0] message[16];
+logic [31:0] w[64]; // hash computation temporary variable
+logic [31:0] message[16]; //temporary BLOCK storage (16 WORDS)
 logic [31:0] wt;
-logic [31:0] S0,S1;
-logic [31:0] hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7;
-logic [31:0] A, B, C, D, E, F, G, H;
-logic [ 7:0] i, j;
-logic [15:0] offset; // in word address
+logic [31:0] S0,S1; // wires in hash computation. Don't touch.
+logic [31:0] hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7; //INITIAL hash and MIDDLE hash values
+logic [31:0] A, B, C, D, E, F, G, H; //OUTPUT hash and MIDDLE hash values
+//logic [ 7:0] i, j; // i = block index in message, j = word index in block
+//logic [15:0] offset; // in word address
 logic [ 7:0] num_blocks;
 logic        enable_write;
 logic [15:0] present_addr;
 logic [31:0] present_write_data;
 logic [512:0] data_read;
-logic [ 7:0] tstep;
+//logic [ 7:0] tstep;
+
+logic [6:0] round_index;
+logic [$clog2(NUM_OF_WORDS/16+1):0] block_offset;
+logic [4:0] word_offset;
 
 
+// Initialize after index
+// start loop ------
+// READ FROM MEMORY / INITIALIZE A
+// START COMPUTE OPERATION
+// ADD OPERATION
+// goto start ------
 
+//TODO Figure out where the initial hash values come from
+parameter int [31:0] h_initial = 32'h6a09e667;
 
 // SHA256 K constants
 parameter int k[0:63] = '{
@@ -53,13 +65,15 @@ parameter int k[0:63] = '{
 // for reading from memory to get original message
 // for writing final computed has value
 assign memory_clk = clk;
-assign memory_addr = present_addr + next_offset;
+assign memory_addr = present_addr + word_offset; // present_addr = in WORDS, word_offset in WORDS, block_offset in BLOCKS        //assign memory_addr = present_addr + word_offset;
+												 // word_offset = offset in WORDS
 assign memory_we = enable_write;
 assign memory_write_data = present_write_data;
 
 
 assign num_blocks = determine_num_blocks(NUM_OF_WORDS); 
-assign tstep = (i - 1);
+//assign tstep = (i - 1);
+
 
 // Note : Function defined are for reference purpose. Feel free to add more functions or modify below.
 // Function to determine number of blocks in memory to fetch
@@ -79,13 +93,12 @@ function logic [15:0] determine_num_blocks(input logic [31:0] size);
 	end
 endfunction
 
-//TODO Check if the function works - prob works
 // SHA256 hash round
 function logic [255:0] sha256_op(input logic [31:0] a, b, c, d, e, f, g, h, w,
                                  input logic [7:0] t);
     logic [31:0] S1, S0, ch, maj, t1, t2; // internal signals
 begin
-    
+    //TODO Check that it is written as such that it looks like it isn't copied
 	S0 = rightrotate(a, 2) ^ rightrotate(a, 13) ^ rightrotate(a, 22);
 	maj = (a & b) ^ (a & c) ^ (b & c);
 	t2 = S0 + maj;
@@ -96,6 +109,22 @@ begin
 	 //            A       B  C  D  E       F  G  H
 end
 endfunction
+
+// expand message to w[64]
+function logic [31:0] expand_message(input logic[31:0] W[64],
+	input logic [6:0] t);
+	logic [31:0] S1, S0; // internal signals
+	begin
+		//S0 = (Wt-15 rightrotate 7) xor (Wt-15 rightrotate 18) xor (Wt-15 rightshift 3)
+		S0 = rightrotate(W[t-15], 7) xor rightrotate(W[t-15], 18) xor rightrotate(W[t-15], 3); 
+		//S1 = (Wt-2 rightrotate 17) xor (Wt-2 rightrotate 19) xor (Wt-2 rightshift 10)
+		S1 = rightrotate(WAIT[t-2],17) xor rightrotate(W[t-2],19) xor rightrotate(W[t-2],10); 
+		//Wt = Wt-16 + s0 + Wt-7 + s1
+		expand_message = W[t-16] + S0 + W[t-7] + S1; 
+		
+	end
+endfunction
+
 
 
 
@@ -109,7 +138,6 @@ endfunction
 // final value after right rotate = 8888 1111 ffff 2222 3333 4444 6666 7777
 // Right rotation function
 
-//TODO Check if it works
 function logic [31:0] ror(input logic [31:0] in,
                                   input logic [7:0] s);
 begin
@@ -117,7 +145,6 @@ begin
 end
 endfunction
 
-//TODO This could be fine
 always_ff @(posedge clk, negedge rst_n)
 begin
   if (!rst_n) begin
@@ -139,43 +166,100 @@ end
 always_comb begin
   if (!rst_n) begin
 	next_state = IDLE;
-	//TODO set values to be reset
   end
   else begin 
 	  case (state)
 		// Initialize hash values h0 to h7 and a to h, other variables and memory we, address offset, etc
 		IDLE: begin 
 			if(start) begin 
-				//TODO figure out what to put here. Reset on idle
+				present_addr = input_addr; //set address for input message
+				word_offset = 0;
+				block_offset = 0;
+				next_state = BLOCK;
+				A=B=C=D=E=F=G=H = 32'b0;
+				{hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash6, hash7} = h_initial;
 		   end
 		end
 
-		// SHA-256 FSM 
-		// Get a BLOCK from the memory, COMPUTE Hash output using SHA256 function    
-		// and write back hash value back to memory
-		BLOCK: begin
-		// Fetch message in 512-bit block size
-		// For each of 512-bit block initiate hash value computation
-		//TODO add output and next state
+		BLOCK: begin //ADD OPERATION
 			
+			//ADD OPERATION
+			{hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash6, hash7} = {hash0+A, hash1+B, hash2+C, hash3+D, hash4+E, hash5+F, hash6+G, hash7+H};
+			
+			if(block_offset == num_blocks-1)begin // if this is the last block, WRITE
+				
+				word_offset = 0;
+				data_read = {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7}
 
+				next_state = WRITE;
+			end else begin //if it is not the last block, begin READ
+				
+				word_offset = 0;
+				{A, B, C, D, E, F, G, H} = {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7};
+
+				next_state = READ;
+			end
+		end
+
+		READ: begin //read a BLOCK from memory 
+			if(word_offset<=15) begin //read more because entire block is not read yet [blocks 0 to 15]
+				message[word_offset] = memory_read_data; 
+				word_offset += 1; 
+				
+				next_state = READ; //do another read while block is not full
+			end else begin // finished reading
+				present_addr = present_addr + 16;//pre-emplively increment memory
+				block_offset += 1; //monitor which block we are on in the message
+
+				next_state = COMPUTE_W;
+			end
+			
 		end
 		
-		// For each block compute hash function
-		// Go back to BLOCK stage after each block hash computation is completed and if
-		// there are still number of message blocks available in memory otherwise
-		// move to WRITE stage
-		COMPUTE: begin
-		// 64 processing rounds steps for 512-bit block 
-		//TODO add output and next state
-					
+		COMPUTE_W: begin
+			if(round_index<=63) begin
+				if(round_index<=15) begin
+					w[round_index] = message[round_index];
+				end else begin
+					w[round_index] = expand_message(w, round_index)
+				end
+
+				round_index = round_index + 1;
+				next_state = COMPUTE_W;
+			end else begin //final round
+				next_state = COMPRESSION;
+				round_index = 0;
+			end
+		end
+
+
+		COMPRESSION: begin // COMPRESSION ALGORITHM
+			if(round_index<=63) begin // if there are still rounds left
+				
+				{A, B, C, D, E, F, G, H} = sha256_op(A, B, C, D, E, F, G, H, w[t], round_index);
+
+				round_index = round_index + 1;
+				next_state = COMPRESSION;
+			end else begin //final round
+				next_state = BLOCK;
+			end
+
 		end
 
 		// h0 to h7 each are 32 bit hashes, which makes up total 256 bit value
 		// h0 to h7 after compute stage has final computed hash value
 		// write back these h0 to h7 to memory starting from output_addr
 		WRITE: begin
-		//TODO add output and next state
+		
+			enable_write = 1;
+			
+			if(word_offset<=15) begin
+				memory_write_data = data_read[(word_offset+1)*32-1:(word_offset)*32]
+				word_offset += 1; 
+				next_state = WRITE; //do another read while block is not full
+			end else begin
+				next_state = IDLE;
+			end
 		
 		end
       endcase
@@ -183,6 +267,7 @@ always_comb begin
 end
 
 // Generate done when SHA256 hash computation has finished and moved to IDLE state
+
 assign done = (state == IDLE);
 
 endmodule
