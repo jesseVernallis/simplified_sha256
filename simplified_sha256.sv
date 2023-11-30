@@ -31,7 +31,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    logic [31:0] A, B, C, D, E, F, G, H; //OUTPUT hash and MIDDLE hash values
    //logic [ 7:0] i, j; // i = block index in message, j = word index in block
    //logic [15:0] offset; // in word address
-   logic [ 7:0] num_blocks;
+   //logic [ 7:0] num_blocks; moved to right above det_num_blocks module
    logic        enable_write_reg;
    logic [15:0] present_addr;
    logic [31:0] present_write_data;
@@ -78,13 +78,14 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    assign memory_write_data = present_write_data;
    
    
-   assign num_blocks = determine_num_blocks(NUM_OF_WORDS); 
+   //assign num_blocks = determine_num_blocks(NUM_OF_WORDS); 
    //assign tstep = (i - 1);
    
    
    // Note : Function defined are for reference purpose. Feel free to add more functions or modify below.
    // Function to determine number of blocks in memory to fetch
-   
+   /********************************************************************
+										FUNCTIONS
    //TODO Check if the input is the raw message or message with padding
    function logic [7:0] determine_num_blocks(input logic [11:0] size);
    
@@ -150,6 +151,44 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 	   ror = (in >> s) | (in << (32-s));
    end
    endfunction
+	****************************************************************/
+	/****************************************************************
+	
+					MODULE DECLARATIONS(REPLACE FUNCTIONS)
+								
+	*****************************************************************/
+	
+	//sha256_op module declaration
+	logic[255:0] sha256_op_out; //output
+	sha256_op sha_op_inst(
+	.a(A), 
+	.b(B), 
+	.c(C), 
+	.d(D), 
+	.e(E), 
+	.f(F), 
+	.g(G), 
+	.h(H), 
+	.w(w[round_index]),
+	.t(round_index),
+	.sha256_out(sha256_op_out)
+	);
+	
+   //expand_message_to_w module declaration
+	logic[31:0] wt; //output
+	expand_message_to_w expand_inst(
+	.w(w),
+	.t(round_index),
+	.wt(wt)
+	);
+	//determine_num_blocks declaration
+	logic[7:0] num_blocks; //output
+	determine_num_blocks det_block_inst(
+	.size(NUM_OF_WORDS),
+	.blocks(num_blocks)
+	);
+	
+
    
    always_ff @(posedge clk, negedge rst_n)
    begin
@@ -219,7 +258,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 				   if(round_index<=15) begin
 					   w[round_index] <= message[round_index];
 				   end else begin
-					   w[round_index] <= expand_message(w, round_index);
+					   w[round_index] <= wt;//expand_message(w, round_index);
 				   end
    
 				   round_index <= round_index + 1;
@@ -236,7 +275,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 		   COMPRESSION: begin // COMPRESSION ALGORITHM
 				// if there are still rounds left
 			   if(round_index<=63) begin 
-				   {A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, w[round_index], round_index);
+				   {A, B, C, D, E, F, G, H} <= sha256_op_out;//sha256_op(A, B, C, D, E, F, G, H, w[round_index], round_index);
 				   round_index <= round_index + 1;
 				   next_state <= COMPRESSION;
 			   end 
