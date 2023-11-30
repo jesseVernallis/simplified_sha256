@@ -4,9 +4,14 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 	input logic [31:0] memory_read_data, // data that is read from memory
 	output logic done, memory_clk, enable_write, // memory
 	output logic [15:0] memory_addr, // current memory address for READ and WRITE
-	output logic [31:0] memory_write_data); // data to write to memory
-   
+	output logic [31:0] memory_write_data,
+	output logic [2:0] current_state_,
+	output logic [7:0] round_index_,
+	output logic [31:0] hash0_,
+	output logic [31:0] A_); // data to write to memory
+	
    // FSM state variables 
+   //                 0     1      2        3         4         5
    enum logic [2:0] {IDLE, READ, BLOCK, COMPUTE_W,COMPRESSION, WRITE} next_state;
    
    //TODO ??
@@ -30,7 +35,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    logic        enable_write_reg;
    logic [15:0] present_addr;
    logic [31:0] present_write_data;
-   logic [512:0] data_read;
+   //logic [512:0] data_read;
    //logic [ 7:0] tstep;
    
    logic [7:0] round_index;
@@ -84,14 +89,14 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    function logic [7:0] determine_num_blocks(input logic [11:0] size);
    
 	   //rounding
-	   logic [7:0] quotient = (size >> 4); //quotient = size/16, size = 101000
-	   logic [11:0] n = quotient << 4; //n = quotient * 16, = 100000 quotient=000010
+	   //logic [7:0] quotient = (size >> 4); //quotient = size/16, size = 101000
+	   //logic [11:0] n = quotient << 4; //n = quotient * 16, = 100000 quotient=000010
    
-	   if(size ^ n) begin
-		   determine_num_blocks = quotient + 8'b00000001;
+	   if(size[3:0]>0) begin
+		   determine_num_blocks = (size>>4) + 1;
 	   end
 	   else begin
-		   determine_num_blocks = quotient;
+		   determine_num_blocks = (size>>4);
 	   end
    endfunction
    
@@ -174,18 +179,20 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 		   BLOCK: begin //ADD OPERATION
 			   
 			   //ADD OPERATION
+			   //TODO optimize addition here and below
 			   {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash6, hash7} <= {hash0+A, hash1+B, hash2+C, hash3+D, hash4+E, hash5+F, hash6+G, hash7+H};
 			   word_offset <= 0;
 				// if this is the last block, WRITE
 				num_blocks_min <= num_blocks - 1;
 			   if(block_offset == num_blocks_min)begin 
 				
-				   data_read <= {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7};
+				   //data_read <= {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7};
 				   next_state <= WRITE;
 			   end 
 				//if it is not the last block, begin READ
 				else begin 
-				   {A, B, C, D, E, F, G, H} <= {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7};
+					//TODO .
+				   {A, B, C, D, E, F, G, H} <= {hash0+A, hash1+B, hash2+C, hash3+D, hash4+E, hash5+F, hash6+G, hash7+H};
 				   next_state <= READ;
 			   end
 		   end
@@ -272,6 +279,12 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    // Generate done when SHA256 hash computation has finished and moved to IDLE state
    
    assign done = (next_state == IDLE);
+	
+	//DEBUGGING
+	assign current_state_ = next_state;
+	assign round_index_ = round_index;
+	assign hash0_ = hash0;
+	assign A_ = A;
    
    endmodule
    

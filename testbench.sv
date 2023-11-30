@@ -12,12 +12,12 @@ logic   [31:0] dpsram_tb[0:16383]; // for result testing, testbench only
 
 logic   [31:0] message_seed = 32'h01234675; // modify message_seed to test your design
 
-logic   [31:0] h0, h1, h2, h3, h4, h5, h6, h7;
-logic   [31:0] a, b, c, d, e, f, g, h;
-logic   [31:0] hh;
+logic   [31:0] h0, h1, h2, h3, h4, h5, h6, h7 /* synthesis hide */;
+logic   [31:0] a, b, c, d, e, f, g, h /* synthesis hide */;
+logic   [31:0] hh /* synthesis hide */;
 
-logic   [31:0] s1, s0;
-logic   [31:0] w[64];
+logic   [31:0] s1, s0 /* synthesis hide */;
+logic   [31:0] w[64] /* synthesis hide */;
 
 int            num_errors;
 int            cycles;
@@ -27,9 +27,28 @@ parameter integer SIZE = NUM_OF_WORDS * 32;
 
 logic [7:0] blocks;
 assign blocks = ((NUM_OF_WORDS+2)/16) + 1;
+
+logic [2:0] current_state_;
+logic [7:0] round_index_;
+logic [31:0] hash0_, A_;
+	
 // instantiate your design
 simplified_sha256 #(.NUM_OF_WORDS(NUM_OF_WORDS)) simplified_sha256_inst 
-(clk, reset_n, start, message_addr, output_addr, done, mem_clk, mem_we, mem_addr, mem_write_data, mem_read_data);
+(.clk,
+ .rst_n(reset_n),
+ .start,
+ .input_addr(message_addr),
+ .hash_addr(output_addr),
+ .memory_read_data(mem_read_data),
+ .done,
+ .memory_clk(mem_clk),
+ .enable_write(mem_we),
+ .memory_addr(mem_addr),
+ .memory_write_data(mem_write_data),
+ .current_state_,
+ .round_index_,
+ .hash0_,
+ .A_);
 
 // SHA256 K constants
 parameter int k[0:63] = '{
