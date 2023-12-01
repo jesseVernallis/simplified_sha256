@@ -10,7 +10,11 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    //                 0     1      2        3         4         5
    enum logic [2:0] {IDLE, READ, BLOCK, COMPUTE_W,COMPRESSION, WRITE} next_state;
    
-   //TODO ??
+    //TODO Figure out where the initial hash values come from
+
+   parameter logic[255:0] initial_hash = {
+	32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19
+    };
    //parameter integer SIZE = ??; 
    
    
@@ -37,7 +41,9 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    logic [7:0] round_index;
    logic [$clog2(((NUM_OF_WORDS+2)/16) + 1):0] block_offset;
    logic [4:0] word_offset;
-   logic [7:0] num_blocks_min;
+   //logic [7:0] num_blocks_min;
+
+   //assign num_blocks_min = (num_blocks - 1);
    
    // Initialize after index
    // start loop ------
@@ -50,7 +56,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    // - READ
    // - 
    
-   //TODO Figure out where the initial hash values come from
+
    // SHA256 K constants
 //    parameter int k[0:63] = '{
 // 	  32'h428a2f98,32'h71374491,32'hb5c0fbcf,32'he9b5dba5,32'h3956c25b,32'h59f111f1,32'h923f82a4,32'hab1c5ed5,
@@ -183,7 +189,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 	.size(NUM_OF_WORDS),
 	.blocks(num_blocks)
 	);
-	
+
 
    
    always_ff @(posedge clk, negedge rst_n)
@@ -202,9 +208,9 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 				   block_offset <= 0;
 				   enable_write_reg <= 0;
 				   round_index <= 0;
-				   {A, B, C, D, E, F, G, H} <= 0;
-				   {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372, 32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};
-				   next_state <= BLOCK;
+				   {A, B, C, D, E, F, G, H} <= initial_hash;
+				   {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7} <= initial_hash;
+				   next_state <= READ;
 			   end
 				else begin
 					next_state <= IDLE;
@@ -214,36 +220,19 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 		   BLOCK: begin //ADD OPERATION
 			   
 			   //ADD OPERATION
-			   //TODO optimize addition here and below
-			   hash0 <= hash0+A;
-				hash1 <= hash1+B;
-				hash2 <= hash2+C;
-				hash3 <= hash3+D;
-				hash4 <= hash4+E;
-				hash5 <= hash5+F;
-				hash6 <= hash6+G;
-				hash7 <= hash7+H;
+			   {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash6, hash7} <= {hash0+A, hash1+B, hash2+C, hash3+D, hash4+E, hash5+F, hash6+G, hash7+H};
 			   word_offset <= 0;
 				// if this is the last block, WRITE
 			   if(block_offset == num_blocks)begin 
-				
+
+				   enable_write_reg <= 1;
 				   //data_read <= {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7};
-							   
-					enable_write_reg <= 1;   
 				   next_state <= WRITE;
 			   end 
 				//if it is not the last block, begin READ
 				else begin 
-					//TODO .
-				   A <= hash0+A;
-					B <= hash1+B;
-					C <= hash2+C;
-					D <= hash3+D;
-					E <= hash4+E;
-					F <= hash5+F;
-					G <= hash6+G;
-					H <= hash7+H;
-					word_offset <= 1;
+				   {A, B, C, D, E, F, G, H} <= {hash0+A, hash1+B, hash2+C, hash3+D, hash4+E, hash5+F, hash6+G, hash7+H};
+				   block_offset <= block_offset + 1; //monitor which block we are on in the message
 				   next_state <= READ;
 			   end
 		   end
@@ -251,18 +240,15 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 		   READ: begin //read a BLOCK from memory 
 				//read more because entire block is not read yet [blocks 0 to 15]
 			   if(word_offset <= 15) begin 
-				   message[word_offset - 1] <= memory_read_data; 
-				   word_offset <= word_offset + 1; 
+				   message[word_offset] <= memory_read_data; 
+				   word_offset <= word_offset + 5'b00001; 
 				   next_state <= READ; //do another read while block is not full
 			   end 
 				// finished reading
 				else begin 
-					message[word_offset - 1] <= memory_read_data; 
 				   present_addr <= present_addr + 16;//pre-emplively increment memory
-				   block_offset <= block_offset + 1; //monitor which block we are on in the message
-					word_offset <= 0;
-					
 				   next_state <= COMPUTE_W;
+				   word_offset <= 0;
 			   end
 			   
 		   end
@@ -274,8 +260,8 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 					   w[round_index] <= message[round_index];
 				   end else begin
 					   w[round_index] <= wt;//expand_message(w, round_index);
-
 				   end
+   
 				   round_index <= round_index + 1;
 				   next_state <= COMPUTE_W;
 			   end 
@@ -296,8 +282,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			   end 
 					//final round
 					else begin 
-				   next_state <= BLOCK;  
-					round_index <= 0;
+				   next_state <= BLOCK;
 			   end
 		   end
    
@@ -305,7 +290,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 		   // h0 to h7 after compute stage has final computed hash value
 		   // write back these h0 to h7 to memory starting from output_addr
 		   WRITE: begin
-
+			   
 			   if(word_offset<=7) begin
 				   case(word_offset)
 					   0: present_write_data <= hash0;

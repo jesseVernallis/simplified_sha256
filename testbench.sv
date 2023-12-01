@@ -12,12 +12,12 @@ logic   [31:0] dpsram_tb[0:16383]; // for result testing, testbench only
 
 logic   [31:0] message_seed = 32'h01234675; // modify message_seed to test your design
 
-logic   [31:0] h0, h1, h2, h3, h4, h5, h6, h7 /* synthesis hide */;
-logic   [31:0] a, b, c, d, e, f, g, h /* synthesis hide */;
-logic   [31:0] hh /* synthesis hide */;
+logic   [31:0] h0, h1, h2, h3, h4, h5, h6, h7;
+logic   [31:0] a, b, c, d, e, f, g, h;
+logic   [31:0] hh;
 
-logic   [31:0] s1, s0 /* synthesis hide */;
-logic   [31:0] w[64] /* synthesis hide */;
+logic   [31:0] s1, s0;
+logic   [31:0] w[64];
 
 int            num_errors;
 int            cycles;
@@ -27,11 +27,6 @@ parameter integer SIZE = NUM_OF_WORDS * 32;
 
 logic [7:0] blocks;
 assign blocks = ((NUM_OF_WORDS+2)/16) + 1;
-
-logic [2:0] current_state_;
-logic [7:0] round_index_;
-logic [31:0] hash0_, A_;
-	
 // instantiate your design
 simplified_sha256 #(.NUM_OF_WORDS(NUM_OF_WORDS)) simplified_sha256_inst 
 (.clk,
@@ -44,11 +39,7 @@ simplified_sha256 #(.NUM_OF_WORDS(NUM_OF_WORDS)) simplified_sha256_inst
  .memory_clk(mem_clk),
  .enable_write(mem_we),
  .memory_addr(mem_addr),
- .memory_write_data(mem_write_data),
- .current_state_,
- .round_index_,
- .hash0_,
- .A_);
+ .memory_write_data(mem_write_data));
 
 // SHA256 K constants
 parameter int k[0:63] = '{
@@ -133,6 +124,9 @@ begin
     end
     dpsram_tb[blocks*16-1] = SIZE; 
 
+    //SKIP EVERYTHING
+    dpsram = dpsram_tb;
+
     $display("***************************\n");
 
     // START PROCESSOR
@@ -166,6 +160,8 @@ begin
 
 	for (numblocks =0; numblocks < blocks; numblocks++) begin
 
+        $display("block=[%1d] state=[IDLE] a=[%h] b=[%h] c=[%h] d=[%h] e=[%h] f=[%h] g=[%h] h=[%h]", numblocks, a, b, c, d, e, f, g, h);
+        $display("block=[%1d] state=[IDLE] h0=[%h] h1=[%h] h2=[%h] h3=[%h] h4=[%h] h5=[%h] h6=[%h] h7=[%h]", numblocks, h0, h1, h2, h3, h4, h5, h6, h7);
 		// WORD EXPANSION
 		for (t = 0; t < 64; t++) begin
 			if (t < 16) begin
@@ -175,6 +171,7 @@ begin
 				s1 = rightrotate(w[t-2], 17) ^ rightrotate(w[t-2], 19) ^ (w[t-2] >> 10);
 				w[t] = w[t-16] + s0 + w[t-7] + s1;
 			end
+            $display("block=[%1d] t=[%1d] w=[%h]", numblocks, t, w[t]);
 		end
 		
 		a = h0;
@@ -186,11 +183,18 @@ begin
 		g = h6;
 		h = h7;
 
+        $display("block=[%1d] state=[READ & ASSIGN] a=[%h] b=[%h] c=[%h] d=[%h] e=[%h] f=[%h] g=[%h] h=[%h]", numblocks, a, b, c, d, e, f, g, h);
+        $display("block=[%1d] state=[READ & ASSIGN] h0=[%h] h1=[%h] h2=[%h] h3=[%h] h4=[%h] h5=[%h] h6=[%h] h7=[%h]", numblocks, h0, h1, h2, h3, h4, h5, h6, h7);
+
 		// HASH ROUNDS
 
 		for (t = 0; t < 64; t++) begin
 			{a, b, c, d, e, f, g, h} = sha256_op(a, b, c, d, e, f, g, h, w[t], t);
+            $display("block=[%1d] round=[%1d] a=[%h] b=[%h] c=[%h] d=[%h] e=[%h] f=[%h] g=[%h] h=[%h]", numblocks, t, a, b, c, d, e, f, g, h);
 		end
+
+        $display("block=[%1d] state=[COMPRESSION] a=[%h] b=[%h] c=[%h] d=[%h] e=[%h] f=[%h] g=[%h] h=[%h]", numblocks, a, b, c, d, e, f, g, h);
+        $display("block=[%1d] state=[COMPRESSION] h0=[%h] h1=[%h] h2=[%h] h3=[%h] h4=[%h] h5=[%h] h6=[%h] h7=[%h]", numblocks, h0, h1, h2, h3, h4, h5, h6, h7);
 
 		// FINAL HASH 
 
@@ -202,6 +206,9 @@ begin
 		h5 = h5 + f;
 		h6 = h6 + g;
 		h7 = h7 + h;
+
+        $display("block=[%1d] state=[ADDITION] a=[%h] b=[%h] c=[%h] d=[%h] e=[%h] f=[%h] g=[%h] h=[%h]", numblocks, a, b, c, d, e, f, g, h);
+        $display("block=[%1d] state=[ADDITION] h0=[%h] h1=[%h] h2=[%h] h3=[%h] h4=[%h] h5=[%h] h6=[%h] h7=[%h]", numblocks, h0, h1, h2, h3, h4, h5, h6, h7);
 	end	
  
     // $display("%x\t%x\t%x\t%x\t%x\t%x\t%x\t%x", h0, h1, h2, h3, h4, h5, h6, h7);

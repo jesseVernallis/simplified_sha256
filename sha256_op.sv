@@ -25,14 +25,14 @@ output logic [255:0] sha256_out);
 									input logic [7:0] t);
 	   logic [31:0] S1, S0, ch, maj, t1, t2; // internal signals
    begin
+	   S1 = ror(e, 6) ^ ror(e, 11) ^ ror(e, 25);
+	   ch = (e & f) ^ ((~e) & g);
+	   t1 = h + S1 + ch + k[t] + w; // h, S1, ch, 
 	   S0 = ror(a, 2) ^ ror(a, 13) ^ ror(a, 22);
 	   maj = (a & b) ^ (a & c) ^ (b & c);
 	   t2 = S0 + maj;
-	   S1 = ror(e, 6) ^ ror(e, 11) ^ ror(e, 25);
-	   ch = (e & f) ^ ((~e) & g);
-	   t1 = h + S1 + ch + k[t] + w;
 	   sha256_op = {t1 + t2, a, b, c, d + t1, e, f, g};
-		//            A       B  C  D  E       F  G  H
+		//           A       B  C  D    E     F  G  H
    end
  endfunction
 	
