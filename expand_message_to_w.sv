@@ -17,9 +17,9 @@ output logic [31:0] wt);
 	   logic [31:0] s1, s0; // internal signals
 	   begin
 		   //S0 = (Wt-15 rightrotate 7) xor (Wt-15 rightrotate 18) xor (Wt-15 rightshift 3)
-		   s0 = ror(w[t-15], 7) ^ ror(w[t-15], 18) ^ ror(w[t-15] >> 3); 
+		   s0 = ror(w[t-15], 7) ^ ror(w[t-15], 18) ^ (w[t-15] >> 3); 
 		   //S1 = (Wt-2 rightrotate 17) xor (Wt-2 rightrotate 19) xor (Wt-2 rightshift 10)
-		   s1 = ror(w[t-2],17) ^ ror(w[t-2],19) ^ ror(w[t-2] >> 10); 
+		   s1 = ror(w[t-2],17) ^ ror(w[t-2],19) ^ (w[t-2] >> 10); 
 		   //Wt = Wt-16 + s0 + Wt-7 + s1
 		   expand_message = w[t-16] + s0 + w[t-7] + s1; 
 		   

@@ -223,13 +223,15 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 				hash5 <= hash5+F;
 				hash6 <= hash6+G;
 				hash7 <= hash7+H;
-			   word_offset <= 0;
+			   
 				// if this is the last block, WRITE
 			   if(block_offset == num_blocks)begin 
 				
 				   //data_read <= {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7};
-							   
-					enable_write_reg <= 1;   
+					present_addr <= hash_addr;
+					present_write_data <= hash0+A;
+					enable_write_reg <= 1; 
+					word_offset <= 0;
 				   next_state <= WRITE;
 			   end 
 				//if it is not the last block, begin READ
@@ -307,7 +309,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 		   WRITE: begin
 
 			   if(word_offset<=7) begin
-				   case(word_offset)
+				   case(word_offset+1)
 					   0: present_write_data <= hash0;
 					   1: present_write_data <= hash1;
 					   2: present_write_data <= hash2;
