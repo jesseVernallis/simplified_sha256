@@ -72,31 +72,23 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			end
 		end
 	endfunction
-	//pads the input message, loads into output message
-	function void pad_message(input logic [31:0] input_message[16], output logic [31:0] output_message[16]);
 
-			// If not add in message words and padding
-			for(int m=0;m<16;m++)begin 
-				//if a word is present add it to the block
-				if(m<words_in_current_block) begin 
-				output_message[m] = input_message[m];
-				// if this is the first padded block and the paddding end indicator word 
-				end else if((m==words_in_current_block) && (words_in_current_block != 0)) begin 
-				output_message[m] = 32'h80000000;
-				//else add the padding zeros to the rest of the words
-				end else begin
-				output_message[m] = 32'b0;
-				end
-			end
-			//if this is the last block add the size to the two words
-			if(block_offset == (num_blocks -1)) begin
-				output_message[14] = SIZE[63:32];
-				output_message[15] = SIZE[31:0];
-			end
-	endfunction
-
+	//pad message module declaration
+	logic [31:0] message_out[16]; //output
+	logic pad_block_enable;
+	pad_block #(.SIZE(SIZE))pad_block_inst(
+		.input_message(message), 
+		.word_size(words_in_current_block), 
+		.block_offset(block_offset), 
+		.num_blocks(num_blocks), 
+		.enable(pad_block_enable),
+		.output_message(message_out)
+	);
+	
+	
 	//sha256_op module declaration
 	logic[255:0] sha256_op_out; //output
+	logic sha256_op_enable;
 	sha256_op sha_op_inst(
 		.a(A), 
 		.b(B), 
@@ -108,14 +100,17 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 		.h(H), 
 		.w(w[round_index]),
 		.t(round_index),
+		.enable(sha256_op_enable),
 		.sha256_out(sha256_op_out)
 	);
 	
    //expand_message_to_w module declaration
 	logic[31:0] wt; //output
+	logic expand_message_enable;
 	expand_message_to_w expand_inst(
 		.w(w),
 		.t(round_index),
+		.enable(expand_message_enable),
 		.wt(wt)
 	);
 	
@@ -177,10 +172,14 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 				else begin
 					//SKip padding if not needed
 					if(words_in_current_block == 16) begin 
+						//compute_w setup
 						round_index <= 0;
+						expand_message_enable <= 1;
 						next_state <= COMPUTE_W;
 					end
 					else begin
+						//pad_block setup
+						pad_block_enable <= 1;
 						next_state <= PAD_BLOCK;
 					end
 			   end
@@ -200,7 +199,6 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			   
 				// if this is the last block, WRITE
 			   if(block_offset == num_blocks)begin 
-				
 					present_addr <= hash_addr;
 					present_write_data <= hash0+A;
 					enable_write_reg <= 1;
@@ -226,13 +224,12 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			
 			//Pad the message if needed
 			PAD_BLOCK: begin
-				//message outr reg to hold padded message
-				logic [31:0] message_out[16];
-				//padding messaging and passing it back to message
-				pad_message(message, message_out);
+				//message set to message out reg from module 
 				message <= message_out;
 				//setup for compute_w
 				round_index <= 0;	
+				pad_block_enable <= 0;
+				expand_message_enable <= 1;
 				next_state <= COMPUTE_W;
 			end
 			
@@ -251,8 +248,12 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			   end
 			   //final round 
 			   else begin 
+					//compression setup
+					expand_message_enable <= 0;
+					sha256_op_enable <= 1;
+					round_index <= 0;
 				   next_state <= COMPRESSION;
-				   round_index <= 0;
+				   
 			   end
 		   end
 			
@@ -266,8 +267,10 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			   end
 			   //final round
 			   else begin
-				   next_state <= BLOCK;
+					//block setup
+					sha256_op_enable <= 0;
 					block_offset <= block_offset+1;
+					next_state <= BLOCK;
 			   end
 		   end
 			//Write has values back to memory
@@ -302,3 +305,4 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    assign done = (next_state == IDLE);
    
    endmodule
+   
