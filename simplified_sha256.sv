@@ -83,13 +83,23 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    assign memory_write_data = present_write_data;
 	
 	assign words_in_current_block = determine_words_in_current_block(block_offset);
-	
+
 	function logic[4:0] determine_words_in_current_block(input logic [11:0] block_offset_);
-		if(block_offset_==num_blocks-1) begin
-			determine_words_in_current_block = NUM_OF_WORDS%16;
-		end else begin
+		automatic logic [31:0] words_left = NUM_OF_WORDS - 16 * block_offset;
+		$display("wl : %d", words_left);
+		if((words_left >= 16) && (block_offset - (num_blocks - 1))) begin
 			determine_words_in_current_block = 16;
 		end
+		else begin
+			if((words_left > 0) && (words_left <= 15)) begin
+				determine_words_in_current_block = NUM_OF_WORDS % 16;
+			end
+			else begin
+				determine_words_in_current_block = 0;
+			end
+
+		end
+		
 	endfunction
    
    //assign num_blocks = determine_num_blocks(NUM_OF_WORDS); 
@@ -177,20 +187,22 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 	
 	int m;
 	function void pad_message(input logic [31:0] input_message[16], output logic [31:0] output_message[16]);
-		if(words_in_current_block>=14) begin
-			output_message = input_message; // there is no space for padding
+		if(words_in_current_block>=16) begin
+			output_message = input_message; // there is no space for padding (padding overlapps between blocks, so there is space)
 		end else begin
-			for(m=0;m<16;m++)begin
+			for(m=0;m<16;m++)begin /// only have to do to m = 15
 				if(m<words_in_current_block) begin
 				output_message[m] = input_message[m];
-				end else if(m==words_in_current_block) begin
+				end else if((m==words_in_current_block) && (words_in_current_block != 0)) begin
 				output_message[m] = 32'h80000000;
-				end else if(m<15) begin
+				end else if(m<=15) begin
 				output_message[m] = 32'b0;
 				end
+				$display("m : %h", output_message[m]);
 			end
-			
-			output_message[15] = SIZE;
+			if(block_offset == (num_blocks -1)) begin
+				output_message[15] = SIZE;
+			end
 			
 		end
 	endfunction
@@ -235,7 +247,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 				   word_offset <= 0;
 				   block_offset <= 0;
 				   enable_write_reg <= 0;
-
+					
 				   {A, B, C, D, E, F, G, H} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372, 32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};
 				   {hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372, 32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};
 				   next_state <= READ;
@@ -287,12 +299,12 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 					present_addr <= present_addr + 1;
 					word_offset <= word_offset + 1;
 					next_state <= READ;
-				end else if(word_offset <= 15 && word_offset<=words_in_current_block) begin //15 cycles with output
+				end else if(word_offset <= 15 /*&& word_offset<=words_in_current_block*/) begin //15 cycles with output
 				   present_addr <= present_addr + 1;
 				   message[word_offset-1] <= memory_read_data; 
 				   word_offset <= word_offset + 1; 
 				   next_state <= READ;
-			   end else if(word_offset == 16 && word_offset<=words_in_current_block) begin // 1 additional cycle with output
+			   end else if(word_offset == 16 /*&& word_offset<=words_in_current_block*/) begin // 1 additional cycle with output
 					message[word_offset-1] <= memory_read_data; 
 				   word_offset <= word_offset + 1; 
 				   next_state <= READ;
@@ -300,9 +312,9 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 				else begin
 				   next_state <= PAD_BLOCK;
 					
-					for(n=0;n<=15;n++) begin
-						$display("CODE [word=%d]=%S", block_offset*16+n, message[n]);
-					end
+					//for(n=0;n<=15;n++) begin
+					//	$display("CODE [word=%d]=%S", block_offset*16+n, message[n]);
+					//end
 			   end
 			   
 		   end
@@ -311,7 +323,6 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 				logic [31:0] message_out[16];
 				pad_message(message, message_out);
 				message <= message_out;
-				
 				round_index <= 0;
 					
 				next_state <= COMPUTE_W;
