@@ -38,6 +38,17 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 	
 	parameter longint SIZE = NUM_OF_WORDS * 32; 
 	
+	parameter int k[0:63] = '{
+	  32'h428a2f98,32'h71374491,32'hb5c0fbcf,32'he9b5dba5,32'h3956c25b,32'h59f111f1,32'h923f82a4,32'hab1c5ed5,
+	  32'hd807aa98,32'h12835b01,32'h243185be,32'h550c7dc3,32'h72be5d74,32'h80deb1fe,32'h9bdc06a7,32'hc19bf174,
+	  32'he49b69c1,32'hefbe4786,32'h0fc19dc6,32'h240ca1cc,32'h2de92c6f,32'h4a7484aa,32'h5cb0a9dc,32'h76f988da,
+	  32'h983e5152,32'ha831c66d,32'hb00327c8,32'hbf597fc7,32'hc6e00bf3,32'hd5a79147,32'h06ca6351,32'h14292967,
+	  32'h27b70a85,32'h2e1b2138,32'h4d2c6dfc,32'h53380d13,32'h650a7354,32'h766a0abb,32'h81c2c92e,32'h92722c85,
+	  32'ha2bfe8a1,32'ha81a664b,32'hc24b8b70,32'hc76c51a3,32'hd192e819,32'hd6990624,32'hf40e3585,32'h106aa070,
+	  32'h19a4c116,32'h1e376c08,32'h2748774c,32'h34b0bcb5,32'h391c0cb3,32'h4ed8aa4a,32'h5b9cca4f,32'h682e6ff3,
+	  32'h748f82ee,32'h78a5636f,32'h84c87814,32'h8cc70208,32'h90befffa,32'ha4506ceb,32'hbef9a3f7,32'hc67178f2
+   };
+	
    // Generate request to memory
    // for reading from memory to get original message
    // for writing final computed has value
@@ -48,15 +59,23 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    assign memory_write_data = present_write_data;
 	
 	assign words_in_current_block = determine_words_in_current_block(block_offset);
+	assign num_blocks = determine_num_blocks(NUM_OF_WORDS);
 
 	
   
    
 	/****************************************************************
 	
-					MODULE AND FUCNTION DECLARATIONS
+							FUCNTION DECLARATIONS
 								
 	*****************************************************************/
+	//right rotate function
+	function logic [31:0] ror(input logic [31:0] in,input logic [7:0] s);
+		begin
+			ror = (in >> s) | (in << (32-s));
+		end
+	endfunction
+	
 	//determines # of words in current block
 	function logic[4:0] determine_words_in_current_block(input logic [11:0] block_offset_);
 		automatic logic [31:0] words_left = NUM_OF_WORDS - 16 * block_offset;
@@ -72,55 +91,71 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			end
 		end
 	endfunction
+	
+	//determine_num_blocks function
+	function logic [7:0] determine_num_blocks(input logic [11:0] size);
+   
+	   if((size[3:0] + 3)>0) begin
+		   determine_num_blocks = ((size+3)>>4) + 1;
+	   end
+	   else begin
+		   determine_num_blocks = ((size+3)>>4);
+	   end
+	endfunction
+	
+	//sha256_op function
+	 function logic [255:0] sha256_op(input logic [31:0] a, b, c, d, e, f, g, h, w,
+										input logic [7:0] t);
+			logic [31:0] S1, S0, ch, maj, t1, t2; // internal signals
+		begin
+			S0 = ror(a, 2) ^ ror(a, 13) ^ ror(a, 22);
+			maj = (a & b) ^ (a & c) ^ (b & c);
+			t2 = S0 + maj;
+			S1 = ror(e, 6) ^ ror(e, 11) ^ ror(e, 25);
+			ch = (e & f) ^ ((~e) & g);
+			t1 = h + S1 + ch + k[t] + w;
+			sha256_op = {t1 + t2, a, b, c, d + t1, e, f, g};
+			//            A       B  C  D  E       F  G  H
+		end
+	 endfunction
+	 
+	 //pad_message function
+	 function void pad_message(input logic [31:0] input_message[16], output logic [31:0] output_message[16]);
 
-	//pad message module declaration
-	logic [31:0] message_out[16]; //output
-	logic pad_block_enable;
-	pad_block #(.SIZE(SIZE))pad_block_inst(
-		.input_message(message), 
-		.word_size(words_in_current_block), 
-		.block_offset(block_offset), 
-		.num_blocks(num_blocks), 
-		.enable(pad_block_enable),
-		.output_message(message_out)
-	);
-	
-	
-	//sha256_op module declaration
-	logic[255:0] sha256_op_out; //output
-	logic sha256_op_enable;
-	sha256_op sha_op_inst(
-		.a(A), 
-		.b(B), 
-		.c(C), 
-		.d(D), 
-		.e(E), 
-		.f(F), 
-		.g(G), 
-		.h(H), 
-		.w(w[round_index]),
-		.t(round_index),
-		.enable(sha256_op_enable),
-		.sha256_out(sha256_op_out)
-	);
-	
-   //expand_message_to_w module declaration
-	logic[31:0] wt; //output
-	logic expand_message_enable;
-	expand_message_to_w expand_inst(
-		.w(w),
-		.t(round_index),
-		.enable(expand_message_enable),
-		.wt(wt)
-	);
-	
-	//determine_num_blocks declaration
-
-	determine_num_blocks det_block_inst(
-	.size(NUM_OF_WORDS),
-	.blocks(num_blocks)
-	);	
-
+			// If not add in message words and padding
+			for(int m=0;m<16;m++)begin 
+				//if a word is present add it to the block
+				if(m<words_in_current_block) begin 
+				output_message[m] = input_message[m];
+				// if this is the first padded block and the paddding end indicator word 
+				end else if((m==words_in_current_block) && (words_in_current_block != 0)) begin 
+				output_message[m] = 32'h80000000;
+				//else add the padding zeros to the rest of the words
+				end else begin
+				output_message[m] = 32'b0;
+				end
+			end
+			//if this is the last block add the size to the two words
+			if(block_offset == (num_blocks -1)) begin
+				output_message[14] = SIZE[63:32];
+				output_message[15] = SIZE[31:0];
+			end
+	 endfunction
+	 
+	 //expand_message_to_w function
+	 function logic [31:0] expand_message(input logic[31:0] w[64],
+	   input logic [7:0] t);
+	   logic [31:0] s1, s0; // internal signals
+	   begin
+		   //S0 = (Wt-15 rightrotate 7) xor (Wt-15 rightrotate 18) xor (Wt-15 rightshift 3)
+		   s0 = ror(w[t-15], 7) ^ ror(w[t-15], 18) ^ (w[t-15] >> 3); 
+		   //S1 = (Wt-2 rightrotate 17) xor (Wt-2 rightrotate 19) xor (Wt-2 rightshift 10)
+		   s1 = ror(w[t-2],17) ^ ror(w[t-2],19) ^ (w[t-2] >> 10); 
+		   //Wt = Wt-16 + s0 + Wt-7 + s1
+		   expand_message = w[t-16] + s0 + w[t-7] + s1; 
+		   
+	    end
+     endfunction
 	/************************************************************************
 	
 						State Machine Logic and Implementation
@@ -174,12 +209,10 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 					if(words_in_current_block == 16) begin 
 						//compute_w setup
 						round_index <= 0;
-						expand_message_enable <= 1;
 						next_state <= COMPUTE_W;
 					end
 					else begin
 						//pad_block setup
-						pad_block_enable <= 1;
 						next_state <= PAD_BLOCK;
 					end
 			   end
@@ -224,12 +257,12 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			
 			//Pad the message if needed
 			PAD_BLOCK: begin
-				//message set to message out reg from module 
+				//message set to message out reg from module
+				logic [31:0] message_out [16];
+				pad_message(message, message_out);
 				message <= message_out;
 				//setup for compute_w
 				round_index <= 0;	
-				pad_block_enable <= 0;
-				expand_message_enable <= 1;
 				next_state <= COMPUTE_W;
 			end
 			
@@ -240,7 +273,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 				   if(round_index<=15) begin
 					   w[round_index] <= message[round_index];
 				   end else begin
-					   w[round_index] <= wt;//expand_message(w, round_index);
+					   w[round_index] <= expand_message(w, round_index);
 					   
 				   end
 				   round_index <= round_index + 1;
@@ -249,8 +282,6 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			   //final round 
 			   else begin 
 					//compression setup
-					expand_message_enable <= 0;
-					sha256_op_enable <= 1;
 					round_index <= 0;
 				   next_state <= COMPRESSION;
 				   
@@ -261,14 +292,13 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 		   COMPRESSION: begin 
 		   	   // if there are still rounds left
 			   if(round_index<=63) begin 
-				   {A, B, C, D, E, F, G, H} <= sha256_op_out;//sha256_op(A, B, C, D, E, F, G, H, w[round_index], round_index);
+				   {A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, w[round_index], round_index);
 				   round_index <= round_index + 1;
 				   next_state <= COMPRESSION;
 			   end
 			   //final round
 			   else begin
 					//block setup
-					sha256_op_enable <= 0;
 					block_offset <= block_offset+1;
 					next_state <= BLOCK;
 			   end
