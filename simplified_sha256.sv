@@ -8,8 +8,8 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 	); // data to write to memory
 	
    // FSM state variables 
-   //                 0     1      2        3         4         5          6
-   enum logic [3:0] {IDLE, READ, BLOCK, PAD_BLOCK, COMPUTE_W,COMPRESSION, WRITE} next_state;
+   //                 0     1      2        3         4         5          
+   enum logic [3:0] {IDLE, READ, BLOCK, PAD_BLOCK,COMPRESSION, WRITE} next_state;
    
    
    // NOTE : Below mentioned frame work is for reference purpose.
@@ -209,7 +209,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 					if(words_in_current_block == 16) begin 
 						//compute_w setup
 						round_index <= 0;
-						next_state <= COMPUTE_W;
+						next_state <=  COMPRESSION;
 					end
 					else begin
 						//pad_block setup
@@ -263,38 +263,29 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 				message <= message_out;
 				//setup for compute_w
 				round_index <= 0;	
-				next_state <= COMPUTE_W;
+				next_state <=  COMPRESSION;
 			end
-			
-		   //Compute W[0] -> W[63] from input padded message
-		   COMPUTE_W: begin
-			   if(round_index<=63) begin
-				
-				   if(round_index<=15) begin
-					   w[round_index] <= message[round_index];
-				   end else begin
-					   w[round_index] <= expand_message(w, round_index);
-					   
-				   end
-				   round_index <= round_index + 1;
-				   next_state <= COMPUTE_W;
-			   end
-			   //final round 
-			   else begin 
-					//compression setup
-					round_index <= 0;
-				   next_state <= COMPRESSION;
-				   
-			   end
-		   end
 			
 			// 64 round of COMPRESSION ALGORITHM
 		   COMPRESSION: begin 
 		   	   // if there are still rounds left
-			   if(round_index<=63) begin 
-				   {A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, w[round_index], round_index);
-				   round_index <= round_index + 1;
-				   next_state <= COMPRESSION;
+			   if(round_index<=64) begin 
+					//Compute W[0] -> W[63] from input padded message
+					
+				   if(round_index<=15) begin
+					   w[round_index] <= message[round_index];
+				   end else begin
+					   w[round_index] <= expand_message(w, round_index); 
+				   end
+					if(round_index != 0) begin
+					// 64 round of COMPRESSION ALGORITHM
+						{A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, w[round_index-1], round_index-1);
+						round_index <= round_index + 1;
+					end
+					else begin
+						round_index <= round_index + 1;
+					end
+				next_state <= COMPRESSION;
 			   end
 			   //final round
 			   else begin
