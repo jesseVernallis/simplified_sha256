@@ -393,7 +393,7 @@ logic [31:0] hash_out[num_nonces];
 			//Write has values back to memory
 		   WRITE: begin
 				nonce <= nonce + 2;
-				if(nonce == 15) begin
+				if(nonce >= 15) begin
 					next_state <= IDLE;
 				end
 				else begin
