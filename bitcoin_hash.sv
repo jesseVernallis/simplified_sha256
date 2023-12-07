@@ -25,7 +25,6 @@ logic [31:0] hash_out[num_nonces];
 
    logic [31:0] hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7; //INITIAL hash and MIDDLE hash values
    logic [31:0] A, B, C, D, E, F, G, H; //OUTPUT hash and MIDDLE hash values
-	logic [31:0] common_hash[8];
 	
    logic        enable_write_reg;
    logic [15:0] present_addr;
@@ -42,7 +41,6 @@ logic [31:0] hash_out[num_nonces];
 	logic [31:0] w_p[INSTANCES][64]; // hash computation temporary variable
 	logic [31:0] messages_p[INSTANCES][16]; //temporary BLOCK storage (16 WORDS)
 
-	logic [31:0] hashnum_p[INSTANCES][8]; //INITIAL hash and MIDDLE hash values
 	logic [31:0] A_[INSTANCES];
 	logic [31:0] B_[INSTANCES];
 	logic [31:0] C_[INSTANCES];
@@ -60,7 +58,6 @@ logic [31:0] hash_out[num_nonces];
 	logic [31:0] hash5_[INSTANCES];
 	logic [31:0] hash6_[INSTANCES];
 	logic [31:0] hash7_[INSTANCES];	//OUTPUT hash and MIDDLE hash values
-	logic [31:0] common_hash_p[8];
 	logic[31:0]  message_out_p[INSTANCES][16];
 
 	
@@ -262,38 +259,18 @@ logic [31:0] hash_out[num_nonces];
 				hash6 <= hash6+G;
 				hash7 <= hash7+H;
 			   
-				// if this is the last block, WRITE
-			   //if(nonce == 16)begin 
-				//for parallel change
+			   A <= hash0+A;
+				B <= hash1+B;
+				C <= hash2+C;
+				D <= hash3+D;
+				E <= hash4+E;
+				F <= hash5+F;
+				G <= hash6+G;
+				H <= hash7+H;
 					
-					//next_state <= WRITE;
-			   //end
-				//if it is not the last block, begin READ
-				//else begin 
-					//TODO .
-				   A <= hash0+A;
-					B <= hash1+B;
-					C <= hash2+C;
-					D <= hash3+D;
-					E <= hash4+E;
-					F <= hash5+F;
-					G <= hash6+G;
-					H <= hash7+H;
-					
-					stage <= stage + 1;
-					if(stage == 0) begin
-						word_offset <= 0;
-						common_hash[0] <= hash0+A;
-						common_hash[1] <= hash1+B;
-						common_hash[2] <= hash2+C;
-						common_hash[3] <= hash3+D;
-						common_hash[4] <= hash4+E;
-						common_hash[5] <= hash5+F;
-						common_hash[6] <= hash6+G;
-						common_hash[7] <= hash7+H;
-						next_state <= READ;
-					end
-			   //end
+				stage <= stage + 1;
+				word_offset <= 0;
+				next_state <= READ;
 		   end
 			// 64 round of COMPRESSION ALGORITHM 
 			/*********DONE***********/
