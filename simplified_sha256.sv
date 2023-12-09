@@ -18,6 +18,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    
    // Local variables
    logic [31:0] w[64]; // hash computation temporary variable
+	logic [31:0] wt,w15,w2,w16,w7,kt;
    logic [31:0] message[16]; //temporary BLOCK storage (16 WORDS)
 
    logic [31:0] hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7; //INITIAL hash and MIDDLE hash values
@@ -28,7 +29,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    logic [31:0] present_write_data;
 
    
-   logic [7:0] round_index;
+   logic [6:0] round_index;
    logic [7:0] block_offset;
    logic [4:0] word_offset;
 
@@ -105,7 +106,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 	
 	//sha256_op function
 	 function logic [255:0] sha256_op(input logic [31:0] a, b, c, d, e, f, g, h, w,
-										input logic [7:0] t);
+										kt);
 			logic [31:0] S1, S0, ch, maj, t1, t2; // internal signals
 		begin
 			S0 = ror(a, 2) ^ ror(a, 13) ^ ror(a, 22);
@@ -113,7 +114,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			t2 = S0 + maj;
 			S1 = ror(e, 6) ^ ror(e, 11) ^ ror(e, 25);
 			ch = (e & f) ^ ((~e) & g);
-			t1 = h + S1 + ch + k[t] + w;
+			t1 = h + S1 + ch + kt + w;
 			sha256_op = {t1 + t2, a, b, c, d + t1, e, f, g};
 			//            A       B  C  D  E       F  G  H
 		end
@@ -143,16 +144,15 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 	 endfunction
 	 
 	 //expand_message_to_w function
-	 function logic [31:0] expand_message(input logic[31:0] w[64],
-	   input logic [7:0] t);
+	 function logic [31:0] expand_message(input logic[31:0] w15,w2,w16,w7);
 	   logic [31:0] s1, s0; // internal signals
 	   begin
 		   //S0 = (Wt-15 rightrotate 7) xor (Wt-15 rightrotate 18) xor (Wt-15 rightshift 3)
-		   s0 = ror(w[t-15], 7) ^ ror(w[t-15], 18) ^ (w[t-15] >> 3); 
+		   s0 = ror(w15, 7) ^ ror(w15, 18) ^ (w15 >> 3); 
 		   //S1 = (Wt-2 rightrotate 17) xor (Wt-2 rightrotate 19) xor (Wt-2 rightshift 10)
-		   s1 = ror(w[t-2],17) ^ ror(w[t-2],19) ^ (w[t-2] >> 10); 
+		   s1 = ror(w2,17) ^ ror(w2,19) ^ (w2 >> 10); 
 		   //Wt = Wt-16 + s0 + Wt-7 + s1
-		   expand_message = w[t-16] + s0 + w[t-7] + s1; 
+		   expand_message = w16 + s0 + w7 + s1; 
 		   
 	    end
      endfunction
@@ -271,15 +271,29 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 		   	   // if there are still rounds left
 			   if(round_index<=64) begin 
 					//Compute W[0] -> W[63] from input padded message
-					
+					kt <= k[round_index];
 				   if(round_index<=15) begin
 					   w[round_index] <= message[round_index];
+						wt <= message[round_index];
+						if(round_index == 15) begin
+							//save inputs for first expand message
+							w15 <= w[1];
+							w2 <= w[14];
+							w16 <= w[0];
+							w7 <= w[9];
+						end
 				   end else begin
-					   w[round_index] <= expand_message(w, round_index); 
+					   wt <= expand_message(w15,w2,w16,w7); 
+						w[round_index] <= expand_message(w15,w2,w16,w7); 
+						//save inputs for next expand message
+						w15 <= w[round_index - 14];
+						w2 <= w[round_index - 1];
+						w16 <= w[round_index - 15];
+						w7 <= w[round_index - 6];
 				   end
 					if(round_index != 0) begin
-					// 64 round of COMPRESSION ALGORITHM
-						{A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, w[round_index-1], round_index-1);
+						// 64 round of COMPRESSION ALGORITHM
+						{A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, wt, kt);
 						round_index <= round_index + 1;
 					end
 					else begin
@@ -327,3 +341,5 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    
    endmodule
    
+
+

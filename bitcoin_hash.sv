@@ -21,6 +21,9 @@ logic [31:0] hash_out[num_nonces];
    
    // Local variables
    logic [31:0] w[64]; // hash computation temporary variable
+	logic [31:0] wt,w15,w2,w16,w7,kt;
+	logic [31:0] wt_p[INSTANCES],w15_p[INSTANCES],w2_p[INSTANCES],
+	w16_p[INSTANCES],w7_p[INSTANCES],kt_p[INSTANCES];
    logic [31:0] message[16]; //temporary BLOCK storage (16 WORDS)
 
    logic [31:0] hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7; //INITIAL hash and MIDDLE hash values
@@ -31,7 +34,8 @@ logic [31:0] hash_out[num_nonces];
    logic [31:0] present_write_data;
 
    
-   logic [7:0] round_index;
+   logic [6:0] round_index;
+	logic [6:0] round_index_p;
    logic [2:0] stage;
 	logic [4:0] nonce;
    logic [4:0] word_offset;
@@ -113,7 +117,7 @@ logic [31:0] hash_out[num_nonces];
 	
 	//sha256_op function
 	 function logic [255:0] sha256_op(input logic [31:0] a, b, c, d, e, f, g, h, w,
-										input logic [7:0] t);
+										kt);
 			logic [31:0] S1, S0, ch, maj, t1, t2; // internal signals
 		begin
 			S0 = ror(a, 2) ^ ror(a, 13) ^ ror(a, 22);
@@ -121,7 +125,7 @@ logic [31:0] hash_out[num_nonces];
 			t2 = S0 + maj;
 			S1 = ror(e, 6) ^ ror(e, 11) ^ ror(e, 25);
 			ch = (e & f) ^ ((~e) & g);
-			t1 = h + S1 + ch + k[t] + w;
+			t1 = h + S1 + ch + kt + w;
 			sha256_op = {t1 + t2, a, b, c, d + t1, e, f, g};
 			//            A       B  C  D  E       F  G  H
 		end
@@ -165,16 +169,16 @@ logic [31:0] hash_out[num_nonces];
 	  endfunction
 
 	 //expand_message_to_w function
-	 function logic [31:0] expand_message(input logic[31:0] w[64],
-	   input logic [7:0] t);
+	 //expand_message_to_w function
+	 function logic [31:0] expand_message(input logic[31:0] w15,w2,w16,w7);
 	   logic [31:0] s1, s0; // internal signals
 	   begin
 		   //S0 = (Wt-15 rightrotate 7) xor (Wt-15 rightrotate 18) xor (Wt-15 rightshift 3)
-		   s0 = ror(w[t-15], 7) ^ ror(w[t-15], 18) ^ (w[t-15] >> 3); 
+		   s0 = ror(w15, 7) ^ ror(w15, 18) ^ (w15 >> 3); 
 		   //S1 = (Wt-2 rightrotate 17) xor (Wt-2 rightrotate 19) xor (Wt-2 rightshift 10)
-		   s1 = ror(w[t-2],17) ^ ror(w[t-2],19) ^ (w[t-2] >> 10); 
+		   s1 = ror(w2,17) ^ ror(w2,19) ^ (w2 >> 10); 
 		   //Wt = Wt-16 + s0 + Wt-7 + s1
-		   expand_message = w[t-16] + s0 + w[t-7] + s1; 
+		   expand_message = w16 + s0 + w7 + s1; 
 		   
 	    end
      endfunction
@@ -217,17 +221,17 @@ logic [31:0] hash_out[num_nonces];
 			/*********************DONE******************/
 		   READ: begin 
 				if(word_offset == 0) begin //1 cycle of no output
-					present_addr <= present_addr + 1;
-					word_offset <= word_offset + 1;
+					present_addr <= present_addr + 16'b1;
+					word_offset <= word_offset + 5'b1;
 					next_state <= READ;
 				end else if(word_offset <= 15) begin //15 cycles with output
-				   present_addr <= present_addr + 1;
+				   present_addr <= present_addr + 16'b1;
 				   message[word_offset-1] <= memory_read_data; 
-				   word_offset <= word_offset + 1; 
+				   word_offset <= word_offset + 5'b1; 
 				   next_state <= READ;
 			   end else if(word_offset == 16) begin // 1 additional cycle with output
 					message[word_offset-1] <= memory_read_data; 
-				   word_offset <= word_offset + 1; 
+				   word_offset <= word_offset + 5'b1; 
 				   next_state <= READ;
 				end
 				else begin
@@ -268,7 +272,7 @@ logic [31:0] hash_out[num_nonces];
 				G <= hash6+G;
 				H <= hash7+H;
 					
-				stage <= stage + 1;
+				stage <= stage + 3'b1;
 				word_offset <= 0;
 				next_state <= READ;
 		   end
@@ -278,19 +282,33 @@ logic [31:0] hash_out[num_nonces];
 		   	   // if there are still rounds left
 			   if(round_index<=64) begin 
 					//Compute W[0] -> W[63] from input padded message
-					
+					kt <= k[round_index];
 				   if(round_index<=15) begin
 					   w[round_index] <= message[round_index];
+						wt <= message[round_index];
+						if(round_index == 15) begin
+							//save inputs for first expand message
+							w15 <= w[1];
+							w2 <= w[14];
+							w16 <= w[0];
+							w7 <= w[9];
+						end
 				   end else begin
-					   w[round_index] <= expand_message(w, round_index); 
+					   w[round_index] <= expand_message(w15,w2,w16,w7); 
+						wt <= expand_message(w15,w2,w16,w7); 
+						//save inputs for next expand message
+						w15 <= w[round_index - 14];
+						w2 <= w[round_index - 1];
+						w16 <= w[round_index - 15];
+						w7 <= w[round_index - 6];
 				   end
 					if(round_index != 0) begin
 					// 64 round of COMPRESSION ALGORITHM
-						{A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, w[round_index-1], round_index-1);
-						round_index <= round_index + 1;
+						{A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, wt, kt);
+						round_index <= round_index + 7'b1;
 					end
 					else begin
-						round_index <= round_index + 1;
+						round_index <= round_index + 7'b1;
 					end
 				next_state <= COMPUTE_ST0;
 			   end
@@ -337,7 +355,7 @@ logic [31:0] hash_out[num_nonces];
 					messages_p[inst] <= message_out_p[inst];
 				end
 				//setup for compute_w
-				round_index <= 0;	
+				round_index_p <= 0;	
 				next_state <=  COMPUTE;
 			end
 				//ADD OPERATION
@@ -371,7 +389,7 @@ logic [31:0] hash_out[num_nonces];
 					G_[inst] <= hash6_[inst]+G_[inst];
 					H_[inst] <= hash7_[inst]+H_[inst];
 				end	
-				stage <= stage + 1;
+				stage <= stage + 3'b1;
 				if(stage == 1)begin
 					next_state <= PAD_BLOCK;
 				end
@@ -393,23 +411,37 @@ logic [31:0] hash_out[num_nonces];
 		   COMPUTE: begin 
 	
 		   	   // if there are still rounds left
-			   if(round_index<=64) begin 
+			   if(round_index_p<=64) begin 
+					kt<= k[round_index_p];	
 					//Compute W[0] -> W[63] from input padded message
 					for(int inst = 0;inst<INSTANCES;inst++) begin
-						if(round_index<=15) begin
-							w_p[inst][round_index] <= messages_p[inst][round_index];
+						if(round_index_p<=15) begin
+							w_p[inst][round_index_p] <= messages_p[inst][round_index_p];
+							wt_p[inst] <= messages_p[inst][round_index_p];
+							if(round_index_p == 15) begin
+							//save inputs for first expand message
+							w15_p[inst] <= w_p[inst][1];
+							w2_p[inst] <= w_p[inst][14];
+							w16_p[inst] <= w_p[inst][0];
+							w7_p[inst] <= w_p[inst][9];
+						end
 						end else begin
-							w_p[inst][round_index] <= expand_message(w_p[inst], round_index); 
+							w_p[inst][round_index_p] <= expand_message(w15_p[inst],w2_p[inst],w16_p[inst],w7_p[inst]); 
+							wt_p[inst] <= expand_message(w15_p[inst],w2_p[inst],w16_p[inst],w7_p[inst]); 
+							w15_p[inst] <= w_p[inst][round_index_p - 14];
+							w2_p[inst] <= w_p[inst][round_index_p - 1];
+							w16_p[inst] <= w_p[inst][round_index_p - 15];
+							w7_p[inst] <= w_p[inst][round_index_p - 6];
 						end
 						
-						if(round_index != 0) begin
+						if(round_index_p != 0) begin
 						// 64 round of COMPRESSION ALGORITHM
 							{A_[inst], B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst]} <= sha256_op(A_[inst], 
-							B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst], w_p[inst][round_index-1], round_index-1);
-							round_index <= round_index + 1;
+							B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst], wt_p[inst], kt);
+							round_index_p <= round_index_p + 7'b1;
 						end
 						else begin
-							round_index <= round_index + 1;
+							round_index_p <= round_index_p + 7'b1;
 						end
 					end		
 					next_state <= COMPUTE;
@@ -427,11 +459,11 @@ logic [31:0] hash_out[num_nonces];
 				if(word_offset < INSTANCES && nonce < 15) begin
 					present_write_data <= hash_out[word_offset+nonce];
 					present_addr <= hash_out_addr + nonce + word_offset;
-					word_offset <= word_offset + 1;
+					word_offset <= word_offset + 5'b1;
 					next_state <= WRITE;
 				end
 				else begin
-					if(nonce >= 15) begin
+					if(nonce >= 12) begin
 						next_state <= IDLE;
 					end
 					else begin
