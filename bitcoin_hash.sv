@@ -58,7 +58,6 @@ logic [31:0] hash_out[num_nonces];
 	logic [31:0] hash5_[INSTANCES];
 	logic [31:0] hash6_[INSTANCES];
 	logic [31:0] hash7_[INSTANCES];	//OUTPUT hash and MIDDLE hash values
-	logic[31:0]  message_out_p[INSTANCES][16];
 
 	
 	parameter longint SIZE = 640; 
@@ -266,45 +265,41 @@ logic [31:0] hash_out[num_nonces];
 			// 64 round of COMPRESSION ALGORITHM 
 			/*********DONE***********/
 		   COMPUTE_ST0: begin 
-	
-		   	   // if there are still rounds left
-			   if(round_index_p!=65) begin 
-					kt<= k[round_index_p];	
-					//Compute W[0] -> W[63] from input padded message
-						if(round_index_p<=15) begin
-							w_p[0][round_index_p] <= message[round_index_p];
-							wt_p[0] <= message[round_index_p];
-							if(round_index_p == 15) begin
-							//save inputs for first expand message
-							w15_p[0] <= w_p[0][1];
-							w2_p[0] <= w_p[0][14];
-							w16_p[0] <= w_p[0][0];
-							w7_p[0] <= w_p[0][9];
-						end
-						end else begin
-							w_p[0][round_index_p] <= expand_message(w15_p[0],w2_p[0],w16_p[0],w7_p[0]); 
-							wt_p[0] <= expand_message(w15_p[0],w2_p[0],w16_p[0],w7_p[0]); 
-							w15_p[0] <= w_p[0][round_index_p - 14];
-							w2_p[0] <= w_p[0][round_index_p - 1];
-							w16_p[0] <= w_p[0][round_index_p - 15];
-							w7_p[0] <= w_p[0][round_index_p - 6];
-						end
-						
-						if(round_index_p != 0) begin
-						// 64 round of COMPRESSION ALGORITHM
-							{A_[0], B_[0], C_[0], D_[0], E_[0], F_[0], G_[0], H_[0]} <= sha256_op(A_[0], 
-							B_[0], C_[0], D_[0], E_[0], F_[0], G_[0], H_[0], wt_p[0], kt);
-							round_index_p <= round_index_p + 7'b1;
-						end
-						else begin
-							round_index_p <= round_index_p + 7'b1;
-						end		
-					next_state <= COMPUTE_ST0;
+				kt<= k[round_index_p];	
+				//Compute W[0] -> W[63] from input padded message
+				if(round_index_p<=15) begin
+					w_p[0][round_index_p] <= message[round_index_p];
+					wt_p[0] <= message[round_index_p];
+					if(round_index_p == 15) begin
+						//save inputs for first expand message
+						w15_p[0] <= w_p[0][1];
+						w2_p[0] <= w_p[0][14];
+						w16_p[0] <= w_p[0][0];
+						w7_p[0] <= w_p[0][9];
+					end
+				end else begin
+					w_p[0][round_index_p] <= expand_message(w15_p[0],w2_p[0],w16_p[0],w7_p[0]); 
+					wt_p[0] <= expand_message(w15_p[0],w2_p[0],w16_p[0],w7_p[0]); 
+					w15_p[0] <= w_p[0][round_index_p - 14];
+					w2_p[0] <= w_p[0][round_index_p - 1];
+					w16_p[0] <= w_p[0][round_index_p - 15];
+					w7_p[0] <= w_p[0][round_index_p - 6];
+				end	
+				if(round_index_p != 0) begin
+				// 64 round of COMPRESSION ALGORITHM
+					{A_[0], B_[0], C_[0], D_[0], E_[0], F_[0], G_[0], H_[0]} <= sha256_op(A_[0], 
+					B_[0], C_[0], D_[0], E_[0], F_[0], G_[0], H_[0], wt_p[0], kt);
+				end
+				
+				round_index_p <= round_index_p + 7'b1;
+				if(round_index_p == 64) begin
+					//block setup
+					next_state <= ADD_ST0;
 				end
 				//final round
 				else begin
-					//block setup
-					next_state <= ADD_ST0;
+					next_state <= COMPUTE_ST0;
+						
 				end
 		   end
 			
@@ -313,7 +308,7 @@ logic [31:0] hash_out[num_nonces];
 				//message set to message out reg from module
 				if(stage == 1) begin
 					for(int inst=0;inst<INSTANCES;inst++) begin
-						pad_message_nonce(saved_message,nonce + inst,message_out_p[inst]);
+						pad_message_nonce(saved_message,nonce + inst,messages_p[inst]);
 						A_[inst] <= hash0;
 						B_[inst] <= hash1;
 						C_[inst] <= hash2;
@@ -334,16 +329,14 @@ logic [31:0] hash_out[num_nonces];
 				end
 				else if(stage == 2) begin
 					for(int inst=0;inst<INSTANCES;inst++) begin
-						pad_message_h(hash0_[inst],hash1_[inst],hash2_[inst],hash3_[inst],hash4_[inst],hash5_[inst],hash6_[inst],hash7_[inst],message_out_p[inst]);
+						pad_message_h(hash0_[inst],hash1_[inst],hash2_[inst],hash3_[inst],hash4_[inst],hash5_[inst],hash6_[inst],hash7_[inst],messages_p[inst]);
 					{A_[inst], B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst]} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
 					32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};
 					{hash0_[inst], hash1_[inst], hash2_[inst], hash3_[inst], hash4_[inst], hash5_[inst], hash6_[inst], hash7_[inst]} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
 					32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};	
 					end
 				end
-				for(int inst=0;inst<INSTANCES;inst++) begin
-					messages_p[inst] <= message_out_p[inst];
-				end
+
 				//setup for compute_w
 				round_index_p <= 0;	
 				next_state <=  COMPUTE;
@@ -390,49 +383,45 @@ logic [31:0] hash_out[num_nonces];
 			// 64 round of COMPRESSION ALGORITHM 
 			/*********DONE***********/
 		   COMPUTE: begin 
-	
-		   	   // if there are still rounds left
-			   if(round_index_p!=65) begin 
-					kt<= k[round_index_p];	
-					//Compute W[0] -> W[63] from input padded message
-					for(int inst = 0;inst<INSTANCES;inst++) begin
-						if(round_index_p<=15) begin
-							w_p[inst][round_index_p] <= messages_p[inst][round_index_p];
-							wt_p[inst] <= messages_p[inst][round_index_p];
-							if(round_index_p == 15) begin
+				
+		   	// if there are still rounds left
+				kt<= k[round_index_p];	
+				//Compute W[0] -> W[63] from input padded message
+				for(int inst = 0;inst<INSTANCES;inst++) begin
+					if(round_index_p<=15) begin
+						w_p[inst][round_index_p] <= messages_p[inst][round_index_p];
+						wt_p[inst] <= messages_p[inst][round_index_p];
+						if(round_index_p == 15) begin
 							//save inputs for first expand message
 							w15_p[inst] <= w_p[inst][1];
 							w2_p[inst] <= w_p[inst][14];
 							w16_p[inst] <= w_p[inst][0];
 							w7_p[inst] <= w_p[inst][9];
 						end
-						end else begin
-							w_p[inst][round_index_p] <= expand_message(w15_p[inst],w2_p[inst],w16_p[inst],w7_p[inst]); 
-							wt_p[inst] <= expand_message(w15_p[inst],w2_p[inst],w16_p[inst],w7_p[inst]); 
-							w15_p[inst] <= w_p[inst][round_index_p - 14];
-							w2_p[inst] <= w_p[inst][round_index_p - 1];
-							w16_p[inst] <= w_p[inst][round_index_p - 15];
-							w7_p[inst] <= w_p[inst][round_index_p - 6];
-						end
-						
-						if(round_index_p != 0) begin
+					end else begin
+						w_p[inst][round_index_p] <= expand_message(w15_p[inst],w2_p[inst],w16_p[inst],w7_p[inst]); 
+						wt_p[inst] <= expand_message(w15_p[inst],w2_p[inst],w16_p[inst],w7_p[inst]); 
+						w15_p[inst] <= w_p[inst][round_index_p - 14];
+						w2_p[inst] <= w_p[inst][round_index_p - 1];
+						w16_p[inst] <= w_p[inst][round_index_p - 15];
+						w7_p[inst] <= w_p[inst][round_index_p - 6];
+					end	
+					if(round_index_p != 0) begin
 						// 64 round of COMPRESSION ALGORITHM
-							{A_[inst], B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst]} <= sha256_op(A_[inst], 
-							B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst], wt_p[inst], kt);
-							round_index_p <= round_index_p + 7'b1;
-						end
-						else begin
-							round_index_p <= round_index_p + 7'b1;
-						end
-					end		
-					next_state <= COMPUTE;
+						{A_[inst], B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst]} <= sha256_op(A_[inst], 
+						B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst], wt_p[inst], kt);
+					end
 				end
-				//final round
-				else begin
+				round_index_p <= round_index_p + 7'b1;
+				if(round_index_p == 64) begin
 					//block setup
 					next_state <= ADD;
 				end
-		   end
+				//final round
+				else begin
+					next_state <= COMPUTE;		
+				end
+		  end
 			
 			
 			//Write has values back to memory
