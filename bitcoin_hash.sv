@@ -20,27 +20,23 @@ logic [31:0] hash_out[num_nonces];
    // or modify these variables. Code below is more as a reference.
    
    // Local variables
-   logic [31:0] w[64]; // hash computation temporary variable
-	logic [31:0] wt,w15,w2,w16,w7,kt;
+	logic [31:0] kt;
 	logic [31:0] wt_p[INSTANCES],w15_p[INSTANCES],w2_p[INSTANCES],
 	w16_p[INSTANCES],w7_p[INSTANCES],kt_p[INSTANCES];
    logic [31:0] message[16]; //temporary BLOCK storage (16 WORDS)
 
    logic [31:0] hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7; //INITIAL hash and MIDDLE hash values
-   logic [31:0] A, B, C, D, E, F, G, H; //OUTPUT hash and MIDDLE hash values
 	
    logic        enable_write_reg;
    logic [15:0] present_addr;
    logic [31:0] present_write_data;
 
    
-   logic [6:0] round_index;
 	logic [6:0] round_index_p;
    logic [2:0] stage;
 	logic [4:0] nonce;
    logic [4:0] word_offset;
 	logic [31:0] saved_message[3];
-	logic [31:0] message_out [16];
 	
 	logic [31:0] w_p[INSTANCES][64]; // hash computation temporary variable
 	logic [31:0] messages_p[INSTANCES][16]; //temporary BLOCK storage (16 WORDS)
@@ -101,18 +97,6 @@ logic [31:0] hash_out[num_nonces];
 		begin
 			ror = (in >> s) | (in << (32-s));
 		end
-	endfunction
-	
-	
-	//determine_num_blocks function
-	function logic [7:0] determine_num_blocks(input logic [11:0] size);
-   
-	   if((size[3:0] + 3)>0) begin
-		   determine_num_blocks = ((size+3)>>4) + 1;
-	   end
-	   else begin
-		   determine_num_blocks = ((size+3)>>4);
-	   end
 	endfunction
 	
 	//sha256_op function
@@ -206,7 +190,7 @@ logic [31:0] hash_out[num_nonces];
 				   enable_write_reg <= 0;
 					nonce <= 0;
 					stage <= 0;
-				   {A, B, C, D, E, F, G, H} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
+				   {A_[0], B_[0], C_[0], D_[0], E_[0], F_[0], G_[0], H_[0]} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
 					32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};
 					{hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
 					32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};
@@ -224,21 +208,17 @@ logic [31:0] hash_out[num_nonces];
 					present_addr <= present_addr + 16'b1;
 					word_offset <= word_offset + 5'b1;
 					next_state <= READ;
-				end else if(word_offset <= 15) begin //15 cycles with output
-				   present_addr <= present_addr + 16'b1;
-				   message[word_offset-1] <= memory_read_data; 
-				   word_offset <= word_offset + 5'b1; 
-				   next_state <= READ;
-			   end else if(word_offset == 16) begin // 1 additional cycle with output
+				end 
+			   else if(word_offset == 16) begin // 1 additional cycle with output
 					message[word_offset-1] <= memory_read_data; 
 				   word_offset <= word_offset + 5'b1; 
 				   next_state <= READ;
 				end
-				else begin
-					//SKip padding if not needed
+				else if(word_offset == 17) begin 
+				//SKip padding if not needed
 					if(stage == 0) begin 
 						//compute_w setup
-						round_index <= 0;
+						round_index_p <= 0;
 						next_state <=  COMPUTE_ST0;
 					end
 					else begin
@@ -248,29 +228,36 @@ logic [31:0] hash_out[num_nonces];
 						saved_message[2] <= message[2];
 						next_state <= PAD_BLOCK;
 					end
+				end
+				else begin
+					//15 cycles with output
+					present_addr <= present_addr + 16'b1;
+				   message[word_offset-1] <= memory_read_data; 
+				   word_offset <= word_offset + 5'b1; 
+				   next_state <= READ;
 			   end
 		   end
 			
 			//ADD OPERATION
 		   ADD_ST0: begin 
 			   //ADD OPERATION
-			   hash0 <= hash0+A;
-				hash1 <= hash1+B;
-				hash2 <= hash2+C;
-				hash3 <= hash3+D;
-				hash4 <= hash4+E;
-				hash5 <= hash5+F;
-				hash6 <= hash6+G;
-				hash7 <= hash7+H;
+			   hash0 <= hash0+A_[0];
+				hash1 <= hash1+B_[0];
+				hash2 <= hash2+C_[0];
+				hash3 <= hash3+D_[0];
+				hash4 <= hash4+E_[0];
+				hash5 <= hash5+F_[0];
+				hash6 <= hash6+G_[0];
+				hash7 <= hash7+H_[0];
 			   
-			   A <= hash0+A;
-				B <= hash1+B;
-				C <= hash2+C;
-				D <= hash3+D;
-				E <= hash4+E;
-				F <= hash5+F;
-				G <= hash6+G;
-				H <= hash7+H;
+			   A_[0] <= hash0+A_[0];
+				B_[0] <= hash1+B_[0];
+				C_[0] <= hash2+C_[0];
+				D_[0] <= hash3+D_[0];
+				E_[0] <= hash4+E_[0];
+				F_[0] <= hash5+F_[0];
+				G_[0] <= hash6+G_[0];
+				H_[0] <= hash7+H_[0];
 					
 				stage <= stage + 3'b1;
 				word_offset <= 0;
@@ -279,45 +266,48 @@ logic [31:0] hash_out[num_nonces];
 			// 64 round of COMPRESSION ALGORITHM 
 			/*********DONE***********/
 		   COMPUTE_ST0: begin 
+	
 		   	   // if there are still rounds left
-			   if(round_index<=64) begin 
+			   if(round_index_p!=65) begin 
+					kt<= k[round_index_p];	
 					//Compute W[0] -> W[63] from input padded message
-					kt <= k[round_index];
-				   if(round_index<=15) begin
-					   w[round_index] <= message[round_index];
-						wt <= message[round_index];
-						if(round_index == 15) begin
+						if(round_index_p<=15) begin
+							w_p[0][round_index_p] <= message[round_index_p];
+							wt_p[0] <= message[round_index_p];
+							if(round_index_p == 15) begin
 							//save inputs for first expand message
-							w15 <= w[1];
-							w2 <= w[14];
-							w16 <= w[0];
-							w7 <= w[9];
+							w15_p[0] <= w_p[0][1];
+							w2_p[0] <= w_p[0][14];
+							w16_p[0] <= w_p[0][0];
+							w7_p[0] <= w_p[0][9];
 						end
-				   end else begin
-					   w[round_index] <= expand_message(w15,w2,w16,w7); 
-						wt <= expand_message(w15,w2,w16,w7); 
-						//save inputs for next expand message
-						w15 <= w[round_index - 14];
-						w2 <= w[round_index - 1];
-						w16 <= w[round_index - 15];
-						w7 <= w[round_index - 6];
-				   end
-					if(round_index != 0) begin
-					// 64 round of COMPRESSION ALGORITHM
-						{A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, wt, kt);
-						round_index <= round_index + 7'b1;
-					end
-					else begin
-						round_index <= round_index + 7'b1;
-					end
-				next_state <= COMPUTE_ST0;
-			   end
-			   //final round
-			   else begin
+						end else begin
+							w_p[0][round_index_p] <= expand_message(w15_p[0],w2_p[0],w16_p[0],w7_p[0]); 
+							wt_p[0] <= expand_message(w15_p[0],w2_p[0],w16_p[0],w7_p[0]); 
+							w15_p[0] <= w_p[0][round_index_p - 14];
+							w2_p[0] <= w_p[0][round_index_p - 1];
+							w16_p[0] <= w_p[0][round_index_p - 15];
+							w7_p[0] <= w_p[0][round_index_p - 6];
+						end
+						
+						if(round_index_p != 0) begin
+						// 64 round of COMPRESSION ALGORITHM
+							{A_[0], B_[0], C_[0], D_[0], E_[0], F_[0], G_[0], H_[0]} <= sha256_op(A_[0], 
+							B_[0], C_[0], D_[0], E_[0], F_[0], G_[0], H_[0], wt_p[0], kt);
+							round_index_p <= round_index_p + 7'b1;
+						end
+						else begin
+							round_index_p <= round_index_p + 7'b1;
+						end		
+					next_state <= COMPUTE_ST0;
+				end
+				//final round
+				else begin
 					//block setup
 					next_state <= ADD_ST0;
-			   end
+				end
 		   end
+			
 			//Pad the message if needed
 			PAD_BLOCK: begin
 				//message set to message out reg from module
@@ -371,15 +361,6 @@ logic [31:0] hash_out[num_nonces];
 					hash6_[inst] <= hash6_[inst]+G_[inst];
 					hash7_[inst] <= hash7_[inst]+H_[inst];
 					
-					// if this is the last block, WRITE
-					//if(nonce == 16)begin 
-					//for parallel change
-						
-						//next_state <= WRITE;
-					//end
-					//if it is not the last block, begin READ
-					//else begin 
-						//TODO .
 					A_[inst] <= hash0_[inst]+A_[inst];
 					B_[inst] <= hash1_[inst]+B_[inst];
 					C_[inst] <= hash2_[inst]+C_[inst];
@@ -411,7 +392,7 @@ logic [31:0] hash_out[num_nonces];
 		   COMPUTE: begin 
 	
 		   	   // if there are still rounds left
-			   if(round_index_p<=64) begin 
+			   if(round_index_p!=65) begin 
 					kt<= k[round_index_p];	
 					//Compute W[0] -> W[63] from input padded message
 					for(int inst = 0;inst<INSTANCES;inst++) begin
@@ -456,14 +437,14 @@ logic [31:0] hash_out[num_nonces];
 			
 			//Write has values back to memory
 		   WRITE: begin
-				if(word_offset < INSTANCES && nonce < 15) begin
+				if(word_offset != INSTANCES) begin
 					present_write_data <= hash_out[word_offset+nonce];
 					present_addr <= hash_out_addr + nonce + word_offset;
 					word_offset <= word_offset + 5'b1;
 					next_state <= WRITE;
 				end
 				else begin
-					if(nonce >= 12) begin
+					if(nonce == 12) begin
 						next_state <= IDLE;
 					end
 					else begin
