@@ -6,7 +6,7 @@ module bitcoin_hash (input logic        clk, reset_n, start,
                      input logic [31:0] memory_read_data);
 
 parameter num_nonces = 16;
-parameter INSTANCES = 8;
+parameter INSTANCES = 16;
 logic [31:0] hash_out[num_nonces];
 
 
@@ -23,7 +23,6 @@ logic [31:0] hash_out[num_nonces];
 	logic [31:0] kt;
    logic [31:0] message[16]; //temporary BLOCK storage (16 WORDS)
 
-   logic [31:0] hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7; //INITIAL hash and MIDDLE hash values
 	
    logic        enable_write_reg;
    logic [15:0] present_addr;
@@ -32,9 +31,7 @@ logic [31:0] hash_out[num_nonces];
    
 	logic [6:0] round_index_p;
    logic [2:0] stage;
-	logic [4:0] nonce;
    logic [4:0] word_offset;
-	logic [31:0] saved_message[3];
 	
 	logic [31:0] w_p[INSTANCES][16]; // hash computation temporary variable
 	logic [31:0] messages_p[INSTANCES][16]; //temporary BLOCK storage (16 WORDS)
@@ -48,14 +45,14 @@ logic [31:0] hash_out[num_nonces];
 	logic [31:0] G_[INSTANCES];
 	logic [31:0] H_[INSTANCES];
 	
-	logic [31:0] hash0_[INSTANCES];
-	logic [31:0] hash1_[INSTANCES];
-	logic [31:0] hash2_[INSTANCES];
-	logic [31:0] hash3_[INSTANCES];
-	logic [31:0] hash4_[INSTANCES];
-	logic [31:0] hash5_[INSTANCES];
-	logic [31:0] hash6_[INSTANCES];
-	logic [31:0] hash7_[INSTANCES];	//OUTPUT hash and MIDDLE hash values
+	logic [31:0] hash0_;
+	logic [31:0] hash1_;
+	logic [31:0] hash2_;
+	logic [31:0] hash3_;
+	logic [31:0] hash4_;
+	logic [31:0] hash5_;
+	logic [31:0] hash6_;
+	logic [31:0] hash7_;	//OUTPUT hash and MIDDLE hash values
 
 	
 	parameter longint SIZE = 640; 
@@ -185,11 +182,10 @@ logic [31:0] hash_out[num_nonces];
 				   present_addr <= header_addr; //set address for input message
 				   word_offset <= 0;
 				   enable_write_reg <= 0;
-					nonce <= 0;
 					stage <= 0;
 				   {A_[0], B_[0], C_[0], D_[0], E_[0], F_[0], G_[0], H_[0]} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
 					32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};
-					{hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
+					{hash0_, hash1_, hash2_, hash3_, hash4_, hash5_, hash6_, hash7_} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
 					32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};
 					next_state <= READ;
 			   end
@@ -220,9 +216,6 @@ logic [31:0] hash_out[num_nonces];
 					end
 					else begin
 						//pad_block setup
-						//saved_message[0] <= message[0];
-						//saved_message[1] <= message[1];
-						//saved_message[2] <= message[2];
 						next_state <= PAD_BLOCK;
 					end
 				end
@@ -238,23 +231,23 @@ logic [31:0] hash_out[num_nonces];
 			//ADD OPERATION
 		   ADD_ST0: begin 
 			   //ADD OPERATION
-			   hash0 <= hash0+A_[0];
-				hash1 <= hash1+B_[0];
-				hash2 <= hash2+C_[0];
-				hash3 <= hash3+D_[0];
-				hash4 <= hash4+E_[0];
-				hash5 <= hash5+F_[0];
-				hash6 <= hash6+G_[0];
-				hash7 <= hash7+H_[0];
+			   hash0_ <= hash0_+A_[0];
+				hash1_ <= hash1_+B_[0];
+				hash2_ <= hash2_+C_[0];
+				hash3_ <= hash3_+D_[0];
+				hash4_ <= hash4_+E_[0];
+				hash5_ <= hash5_+F_[0];
+				hash6_ <= hash6_+G_[0];
+				hash7_ <= hash7_+H_[0];
 			   
-			   A_[0] <= hash0+A_[0];
-				B_[0] <= hash1+B_[0];
-				C_[0] <= hash2+C_[0];
-				D_[0] <= hash3+D_[0];
-				E_[0] <= hash4+E_[0];
-				F_[0] <= hash5+F_[0];
-				G_[0] <= hash6+G_[0];
-				H_[0] <= hash7+H_[0];
+			   A_[0] <= hash0_+A_[0];
+				B_[0] <= hash1_+B_[0];
+				C_[0] <= hash2_+C_[0];
+				D_[0] <= hash3_+D_[0];
+				E_[0] <= hash4_+E_[0];
+				F_[0] <= hash5_+F_[0];
+				G_[0] <= hash6_+G_[0];
+				H_[0] <= hash7_+H_[0];
 					
 				stage <= stage + 3'b1;
 				word_offset <= 0;
@@ -308,31 +301,24 @@ logic [31:0] hash_out[num_nonces];
 				//message set to message out reg from module
 				if(stage == 1) begin
 					for(int inst=0;inst<INSTANCES;inst++) begin
-						pad_message_nonce(message[0:2],nonce + inst,messages_p[inst]);
-						A_[inst] <= hash0;
-						B_[inst] <= hash1;
-						C_[inst] <= hash2;
-						D_[inst] <= hash3;
-						E_[inst] <= hash4;
-						F_[inst] <= hash5;
-						G_[inst] <= hash6;
-						H_[inst] <= hash7;
-						hash0_[inst] <= hash0;
-						hash1_[inst] <= hash1;
-						hash2_[inst] <= hash2;
-						hash3_[inst] <= hash3;
-						hash4_[inst] <= hash4;
-						hash5_[inst] <= hash5;
-						hash6_[inst] <= hash6;
-						hash7_[inst] <= hash7;
+						pad_message_nonce(message[0:2], inst,messages_p[inst]);
+						
+						A_[inst] <= hash0_;
+						B_[inst] <= hash1_;
+						C_[inst] <= hash2_;
+						D_[inst] <= hash3_;
+						E_[inst] <= hash4_;
+						F_[inst] <= hash5_;
+						G_[inst] <= hash6_;
+						H_[inst] <= hash7_;
 					end
 				end
 				else if(stage == 2) begin
 					for(int inst=0;inst<INSTANCES;inst++) begin
-						pad_message_h(hash0_[inst],hash1_[inst],hash2_[inst],hash3_[inst],hash4_[inst],hash5_[inst],hash6_[inst],hash7_[inst],messages_p[inst]);
+						pad_message_h(A_[inst], B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst],messages_p[inst]);
 					{A_[inst], B_[inst], C_[inst], D_[inst], E_[inst], F_[inst], G_[inst], H_[inst]} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
 					32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};
-					{hash0_[inst], hash1_[inst], hash2_[inst], hash3_[inst], hash4_[inst], hash5_[inst], hash6_[inst], hash7_[inst]} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
+					{hash0_, hash1_, hash2_, hash3_, hash4_, hash5_, hash6_, hash7_} <= {32'h6a09e667, 32'hbb67ae85, 32'h3c6ef372,
 					32'ha54ff53a, 32'h510e527f, 32'h9b05688c, 32'h1f83d9ab, 32'h5be0cd19};	
 					end
 				end
@@ -345,34 +331,25 @@ logic [31:0] hash_out[num_nonces];
 		   ADD: begin 
 				for(int inst=0;inst<INSTANCES;inst++) begin
 					//ADD OPERATION
-					hash0_[inst] <= hash0_[inst]+A_[inst];
-					hash1_[inst] <= hash1_[inst]+B_[inst];
-					hash2_[inst] <= hash2_[inst]+C_[inst];
-					hash3_[inst] <= hash3_[inst]+D_[inst];
-					hash4_[inst] <= hash4_[inst]+E_[inst];
-					hash5_[inst] <= hash5_[inst]+F_[inst];
-					hash6_[inst] <= hash6_[inst]+G_[inst];
-					hash7_[inst] <= hash7_[inst]+H_[inst];
-					
-					A_[inst] <= hash0_[inst]+A_[inst];
-					B_[inst] <= hash1_[inst]+B_[inst];
-					C_[inst] <= hash2_[inst]+C_[inst];
-					D_[inst] <= hash3_[inst]+D_[inst];
-					E_[inst] <= hash4_[inst]+E_[inst];
-					F_[inst] <= hash5_[inst]+F_[inst];
-					G_[inst] <= hash6_[inst]+G_[inst];
-					H_[inst] <= hash7_[inst]+H_[inst];
+					A_[inst] <= hash0_+A_[inst];
+					B_[inst] <= hash1_+B_[inst];
+					C_[inst] <= hash2_+C_[inst];
+					D_[inst] <= hash3_+D_[inst];
+					E_[inst] <= hash4_+E_[inst];
+					F_[inst] <= hash5_+F_[inst];
+					G_[inst] <= hash6_+G_[inst];
+					H_[inst] <= hash7_+H_[inst];
 				end	
 				stage <= stage + 3'b1;
 				if(stage == 1)begin
 					next_state <= PAD_BLOCK;
 				end
 				else if(stage == 2)	begin
-					present_addr <= hash_out_addr + nonce;
+					present_addr <= hash_out_addr;
 					for(int inst=0;inst<INSTANCES;inst++) begin
-						hash_out[inst+nonce]<= hash0_[inst]+A_[inst];
+						hash_out[inst]<= hash0_+A_[inst];
 					end
-					present_write_data <= hash0_[0]+A_[0];
+					present_write_data <= hash0_+A_[0];
 					enable_write_reg <= 1;
 					word_offset <= 1;
 					next_state <= WRITE;
@@ -434,20 +411,13 @@ logic [31:0] hash_out[num_nonces];
 			//Write has values back to memory
 		   WRITE: begin
 				if(word_offset != INSTANCES) begin
-					present_write_data <= hash_out[word_offset+nonce];
-					present_addr <= hash_out_addr + nonce + word_offset;
+					present_write_data <= hash_out[word_offset];
+					present_addr <= hash_out_addr  + word_offset;
 					word_offset <= word_offset + 5'b1;
 					next_state <= WRITE;
 				end
 				else begin
-					if(nonce == 8) begin
-						next_state <= IDLE;
-					end
-					else begin
-					stage <= 1;
-						nonce <= nonce + INSTANCES;
-						next_state <= PAD_BLOCK;
-					end
+					next_state <= IDLE;
 				end
 			end
 		endcase
@@ -457,3 +427,4 @@ logic [31:0] hash_out[num_nonces];
    
    assign done = (next_state == IDLE);
 endmodule
+

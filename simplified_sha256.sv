@@ -17,8 +17,8 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    // or modify these variables. Code below is more as a reference.
    
    // Local variables
-   logic [31:0] w[64]; // hash computation temporary variable
-	logic [31:0] wt,w15,w2,w16,w7,kt;
+   logic [31:0] w[16]; // hash computation temporary variable
+	logic [31:0] kt;
    logic [31:0] message[16]; //temporary BLOCK storage (16 WORDS)
 
    logic [31:0] hash0, hash1, hash2, hash3, hash4, hash5, hash6, hash7; //INITIAL hash and MIDDLE hash values
@@ -268,45 +268,44 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
 			
 			// 64 round of COMPRESSION ALGORITHM
 		   COMPRESSION: begin 
-		   	   // if there are still rounds left
-			   if(round_index<=64) begin 
-					//Compute W[0] -> W[63] from input padded message
-					kt <= k[round_index];
-				   if(round_index<=15) begin
-					   w[round_index] <= message[round_index];
-						wt <= message[round_index];
-						if(round_index == 15) begin
-							//save inputs for first expand message
-							w15 <= w[1];
-							w2 <= w[14];
-							w16 <= w[0];
-							w7 <= w[9];
-						end
-				   end else begin
-					   wt <= expand_message(w15,w2,w16,w7); 
-						w[round_index] <= expand_message(w15,w2,w16,w7); 
-						//save inputs for next expand message
-						w15 <= w[round_index - 14];
-						w2 <= w[round_index - 1];
-						w16 <= w[round_index - 15];
-						w7 <= w[round_index - 6];
-				   end
-					if(round_index != 0) begin
-						// 64 round of COMPRESSION ALGORITHM
-						{A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, wt, kt);
-						round_index <= round_index + 1;
-					end
-					else begin
-						round_index <= round_index + 1;
-					end
-				next_state <= COMPRESSION;
-			   end
-			   //final round
-			   else begin
+				kt<= k[round_index];	
+				//Compute W[0] -> W[63] from input padded message
+				if(round_index<=15) begin
+					w[15] <= message[round_index];
+				end else begin
+					w[15] <= expand_message(w[1],w[14],w[0],w[9]); 
+				end	
+				if(round_index != 0) begin
+				// 64 round of COMPRESSION ALGORITHM
+					{A, B, C, D, E, F, G, H} <= sha256_op(A, B, C, D, E, F, G, H, w[15], kt);
+				end
+				
+				round_index <= round_index + 7'b1;
+				if(round_index == 64) begin
 					//block setup
 					block_offset <= block_offset+1;
 					next_state <= BLOCK;
-			   end
+				end
+				//final round
+				else begin
+					w[0] <= w[1];
+					w[1] <= w[2];
+					w[2] <= w[3];
+					w[3] <= w[4];
+					w[4] <= w[5];
+					w[5] <= w[6];
+					w[6] <= w[7];
+					w[7] <= w[8];
+					w[8] <= w[9];
+					w[9] <= w[10];
+					w[10] <= w[11];
+					w[11] <= w[12];
+					w[12] <= w[13];
+					w[13] <= w[14];
+					w[14] <= w[15];
+					next_state <= COMPRESSION;
+						
+				end
 		   end
 			//Write has values back to memory
 		   WRITE: begin
