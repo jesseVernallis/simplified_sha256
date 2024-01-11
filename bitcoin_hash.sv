@@ -11,13 +11,8 @@ logic [31:0] hash_out[num_nonces];
 
 
    // FSM state variables 
-   //                 0     1       2        3        4     5          
+   //                 0     1       2        3        4     5     6        7   8    
    enum logic [2:0] {IDLE, READ, COMPUTE_ST0, ADD_ST0, PAD_BLOCK, COMPUTE, ADD,WRITE} next_state;
-   
-   
-   // NOTE : Below mentioned frame work is for reference purpose.
-   // Local variables might not be complete and you might have to add more variables
-   // or modify these variables. Code below is more as a reference.
    
    // Local variables
 	logic [31:0] kt;
@@ -83,7 +78,7 @@ logic [31:0] hash_out[num_nonces];
    
 	/****************************************************************
 	
-							FUCNTION DECLARATIONS
+			      FUCNTION DECLARATIONS
 								
 	*****************************************************************/
 	//right rotate function
@@ -164,7 +159,7 @@ logic [31:0] hash_out[num_nonces];
 
 	/************************************************************************
 	
-						State Machine Logic and Implementation
+			   State Machine Logic and Implementation
 	
 	*************************************************************************/
 	
