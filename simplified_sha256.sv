@@ -67,7 +67,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
    
 	/****************************************************************
 	
-							FUCNTION DECLARATIONS
+			     FUCNTION DECLARATIONS
 								
 	*****************************************************************/
 	//right rotate function
@@ -158,7 +158,7 @@ module simplified_sha256 #(parameter integer NUM_OF_WORDS = 40)(
      endfunction
 	/************************************************************************
 	
-						State Machine Logic and Implementation
+			State Machine Logic and Implementation
 	
 	*************************************************************************/
    always_ff @(posedge clk, negedge rst_n)
